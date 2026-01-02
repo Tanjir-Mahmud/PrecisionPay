@@ -3,7 +3,7 @@ import { format } from "date-fns";
 
 export async function getDashboardStats() {
     try {
-        const currentMonth = format(new Date(), "yyyy-MM");
+        let targetMonth = format(new Date(), "yyyy-MM");
 
         // 0. Compliance Context
         // Fallback if settings table empty or locked (using raw query approach in settings, but standard here for read)
@@ -15,8 +15,22 @@ export async function getDashboardStats() {
         };
 
         // 1. Total Payout & Expense Distribution
-        // STRICTLY CURRENT MONTH (Real-Time Promise)
-        // If data is missing, we WANT it to be empty so user knows to run payroll.
+        // "Smart Dashboard" - If current month has no data, find the latest month that DOES.
+        // This ensures the charts are never empty if we have history.
+        const currentMonthCheck = await prisma.payrollRun.findFirst({
+            where: { monthYear: targetMonth, status: { in: ["APPROVED", "PAID"] } }
+        });
+
+        if (!currentMonthCheck) {
+            const latestRun = await prisma.payrollRun.findFirst({
+                where: { status: { in: ["APPROVED", "PAID"] } },
+                orderBy: { monthYear: 'desc' }
+            });
+            if (latestRun) {
+                targetMonth = latestRun.monthYear;
+            }
+        }
+
         const payoutAggregate = await prisma.payrollRun.aggregate({
             _sum: {
                 netPay: true,
@@ -26,7 +40,7 @@ export async function getDashboardStats() {
                 basePay: true
             },
             where: {
-                monthYear: currentMonth,
+                monthYear: targetMonth,
                 status: { in: ["APPROVED", "PAID"] }
             }
         });
@@ -38,16 +52,19 @@ export async function getDashboardStats() {
             bonuses: payoutAggregate._sum.bonus || 0
         };
 
-        // 2. Pending Payslips
+        // 2. Pending Payslips (Always current month, or maybe target month? Let's keep pending as "Current Action Items")
         const pendingCount = await prisma.payrollRun.count({
             where: {
-                monthYear: currentMonth,
+                monthYear: format(new Date(), "yyyy-MM"), // Pending is always about "Now"
                 status: { in: ["DRAFT", "PENDING_REVIEW"] }
             }
         });
 
-        // 3. Comparison
-        const lastMonth = format(new Date(new Date().setMonth(new Date().getMonth() - 1)), "yyyy-MM");
+        // 3. Comparison (Target Month vs Month Before Target)
+        const lastMonthDate = new Date(targetMonth + "-01"); // Append day to parse
+        lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
+        const lastMonth = format(lastMonthDate, "yyyy-MM");
+
         const lastMonthPayout = await prisma.payrollRun.aggregate({
             _sum: { netPay: true },
             where: { monthYear: lastMonth, status: { in: ["APPROVED", "PAID"] } }
@@ -62,9 +79,9 @@ export async function getDashboardStats() {
             payoutChange = `${change > 0 ? "+" : ""}${change.toFixed(1)}% vs Last Month`;
         }
 
-        // 4. Audit Engine
+        // 4. Audit Engine (Run on the displayed data)
         const runs = await prisma.payrollRun.findMany({
-            where: { monthYear: currentMonth },
+            where: { monthYear: targetMonth },
             include: { employee: true }
         });
 
