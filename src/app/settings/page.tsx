@@ -10,6 +10,7 @@ import CountrySwitcher from "@/components/settings/CountrySwitcher";
 import PenaltyConfig from "@/components/settings/PenaltyConfig";
 import BonusConfig from "@/components/settings/BonusConfig";
 import DangerZone from "@/components/settings/DangerZone";
+import DataImportCard from "@/components/settings/DataImportCard";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,12 @@ export default async function SettingsPage() {
             </div>
 
             <form action={updateSettings} className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* 1. Company Profile */}
+                {/* 1. Data Import (New) */}
+                <div className="md:col-span-2">
+                    <DataImportCard />
+                </div>
+
+                {/* 2. Company Profile */}
                 <div className="glass-card p-6 space-y-4">
                     <h3 className="text-lg font-semibold text-white flex items-center">
                         <Building2 className="w-5 h-5 mr-2 text-blue-400" />
