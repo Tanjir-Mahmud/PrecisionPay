@@ -100,63 +100,68 @@ export interface PayrollWithVariance {
 }
 
 export async function getPendingPayrolls(): Promise<PayrollWithVariance[]> {
-    const currentMonth = format(new Date(), "yyyy-MM");
-    const lastMonth = format(subMonths(new Date(), 1), "yyyy-MM");
+    try {
+        const currentMonth = format(new Date(), "yyyy-MM");
+        const lastMonth = format(subMonths(new Date(), 1), "yyyy-MM");
 
-    // Fetch Current PENDING/DRAFT
-    const currentRuns = await prisma.payrollRun.findMany({
-        where: {
-            monthYear: currentMonth,
-            status: { in: ["DRAFT", "PENDING_REVIEW"] }
-        },
-        include: {
-            employee: true
-        }
-    });
+        // Fetch Current PENDING/DRAFT
+        const currentRuns = await prisma.payrollRun.findMany({
+            where: {
+                monthYear: currentMonth,
+                status: { in: ["DRAFT", "PENDING_REVIEW"] }
+            },
+            include: {
+                employee: true
+            }
+        });
 
-    // Fetch Last Month's Net Pay for comparison
-    const employeeIds = currentRuns.map(r => r.employeeId);
-    const lastRuns = await prisma.payrollRun.findMany({
-        where: {
-            monthYear: lastMonth,
-            employeeId: { in: employeeIds }
-        },
-        select: {
-            employeeId: true,
-            netPay: true
-        }
-    });
+        // Fetch Last Month's Net Pay for comparison
+        const employeeIds = currentRuns.map(r => r.employeeId);
+        const lastRuns = await prisma.payrollRun.findMany({
+            where: {
+                monthYear: lastMonth,
+                employeeId: { in: employeeIds }
+            },
+            select: {
+                employeeId: true,
+                netPay: true
+            }
+        });
 
-    // Map for quick lookup
-    const lastMonthMap = new Map(lastRuns.map(r => [r.employeeId, r.netPay]));
+        // Map for quick lookup
+        const lastMonthMap = new Map(lastRuns.map(r => [r.employeeId, r.netPay]));
 
-    // Build Result
-    return currentRuns.map(run => {
-        const lastNet = lastMonthMap.get(run.employeeId) || 0;
-        let variance = 0;
-        if (lastNet > 0) {
-            variance = ((run.netPay - lastNet) / lastNet) * 100;
-        }
+        // Build Result
+        return currentRuns.map(run => {
+            const lastNet = lastMonthMap.get(run.employeeId) || 0;
+            let variance = 0;
+            if (lastNet > 0) {
+                variance = ((run.netPay - lastNet) / lastNet) * 100;
+            }
 
-        return {
-            id: run.id,
-            employeeName: `${run.employee.firstName} ${run.employee.lastName}`,
-            department: run.employee.department,
-            monthYear: run.monthYear,
-            netPay: run.netPay,
-            basePay: run.basePay,
-            hra: run.hra,
-            transport: run.transport,
-            overtimePay: run.overtimePay,
-            bonus: run.bonus,
-            tax: run.tax,
-            pf: run.pf,
-            leaveDeduction: run.leaveDeduction,
-            status: run.status,
-            flaggedForReview: run.flaggedForReview,
-            variancePct: parseFloat(variance.toFixed(1))
-        };
-    });
+            return {
+                id: run.id,
+                employeeName: `${run.employee.firstName} ${run.employee.lastName}`,
+                department: run.employee.department,
+                monthYear: run.monthYear,
+                netPay: run.netPay,
+                basePay: run.basePay,
+                hra: run.hra,
+                transport: run.transport,
+                overtimePay: run.overtimePay,
+                bonus: run.bonus,
+                tax: run.tax,
+                pf: run.pf,
+                leaveDeduction: run.leaveDeduction,
+                status: run.status,
+                flaggedForReview: run.flaggedForReview,
+                variancePct: parseFloat(variance.toFixed(1))
+            };
+        });
+    } catch (e) {
+        console.error("Failed to fetch pending payrolls:", e);
+        return [];
+    }
 }
 
 export async function approvePayroll(id: string) {

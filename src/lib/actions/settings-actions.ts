@@ -6,36 +6,56 @@ import { revalidatePath } from "next/cache";
 const prisma = new PrismaClient();
 
 export async function getSettings() {
-    // Fallback: Try RAW query first to get 'country' if Client is outdated
     try {
-        const rows: any = await prisma.$queryRaw`SELECT * FROM CompanySettings WHERE id = 'default'`;
+        // Fallback: Try RAW query first to get 'country' if Client is outdated
+        try {
+            const rows: any = await prisma.$queryRaw`SELECT * FROM CompanySettings WHERE id = 'default'`;
 
-        if (rows && rows.length > 0) {
-            return {
-                ...rows[0],
-                // Ensure defaults if null (though DB defaults handle this)
-                country: rows[0].country || "USA",
-                standardWorkHours: rows[0].standardWorkHours || 160,
-                overtimeMultiplier: rows[0].overtimeMultiplier || 1.5
-            };
+            if (rows && rows.length > 0) {
+                return {
+                    ...rows[0],
+                    // Ensure defaults if null (though DB defaults handle this)
+                    country: rows[0].country || "USA",
+                    standardWorkHours: rows[0].standardWorkHours || 160,
+                    overtimeMultiplier: rows[0].overtimeMultiplier || 1.5
+                };
+            }
+        } catch (e) {
+            console.warn("Raw query failed, falling back to standard client (Country may be missing)", e);
         }
-    } catch (e) {
-        console.warn("Raw query failed, falling back to standard client (Country may be missing)", e);
-    }
 
-    return await prisma.companySettings.upsert({
-        where: { id: "default" },
-        update: {},
-        create: {
-            id: "default",
-            companyName: "PrecisionPay Inc.",
+        return await prisma.companySettings.upsert({
+            where: { id: "default" },
+            update: {},
+            create: {
+                id: "default",
+                companyName: "PrecisionPay Inc.",
+                standardWorkHours: 160,
+                overtimeMultiplier: 1.5,
+                shiftStart: "09:00",
+                shiftEnd: "17:00",
+                gracePeriodMins: 15
+            }
+        });
+    } catch (e) {
+        console.error("Failed to fetch/upsert settings (DB Error):", e);
+        // Fallback Mock Settings
+        return {
+            id: "mock-default",
+            companyName: "PrecisionPay Inc. (Offline Mode)",
             standardWorkHours: 160,
             overtimeMultiplier: 1.5,
             shiftStart: "09:00",
             shiftEnd: "17:00",
-            gracePeriodMins: 15
-        }
-    });
+            gracePeriodMins: 15,
+            country: "USA",
+            bonusThreshold: 90,
+            bonusRate: 5.0,
+            lateDeductionRatio: 0.5,
+            maxLateFlags: 3,
+            taxBracketJson: "[]"
+        };
+    }
 }
 
 // Helper to force schema sync if CLI is locked
