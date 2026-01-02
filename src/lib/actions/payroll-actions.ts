@@ -168,6 +168,7 @@ export async function approvePayroll(id: string) {
         data: { status: "APPROVED", flaggedForReview: false }
     });
     revalidatePath("/payroll");
+    revalidatePath("/");
 }
 
 export async function flagPayroll(id: string) {
@@ -177,6 +178,7 @@ export async function flagPayroll(id: string) {
         data: { flaggedForReview: !run?.flaggedForReview }
     });
     revalidatePath("/payroll");
+    revalidatePath("/");
 }
 
 export async function bulkApprove() {
@@ -192,4 +194,5 @@ export async function bulkApprove() {
         data: { status: "APPROVED" }
     });
     revalidatePath("/payroll");
+    revalidatePath("/");
 }
