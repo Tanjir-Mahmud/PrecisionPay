@@ -3,8 +3,7 @@ import {
     History,
     CheckCircle2 // Audit Icon
 } from "lucide-react";
-// import PayrollTable from "@/components/payroll/PayrollTable"; // Legacy SQL
-import FirebasePayrollTable from "@/components/payroll/FirebasePayrollTable";
+import PayrollTable from "@/components/payroll/PayrollTable";
 import { getPendingPayrolls } from "@/lib/actions/payroll-actions";
 import RunPayrollButton from "@/components/payroll/RunPayrollButton";
 
@@ -25,8 +24,7 @@ export default async function PayrollPage() {
 
             <div className="grid grid-cols-1 gap-6">
                 <div className="glass-card p-0 overflow-hidden">
-                    {/* Replaced SQL Header with Firebase Component Internal Header */}
-                    <FirebasePayrollTable />
+                    <PayrollTable initialData={pendingData} />
                 </div>
             </div>
 
