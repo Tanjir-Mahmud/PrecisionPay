@@ -9,6 +9,8 @@ import { format } from "date-fns";
 import { PrismaClient } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 
+export const dynamic = "force-dynamic";
+
 // Server Action Wrapper for UI
 async function manualClockIn(formData: FormData) {
     "use server";
