@@ -15,6 +15,8 @@ export async function getDashboardStats() {
         };
 
         // 1. Total Payout & Expense Distribution
+        // STRICTLY CURRENT MONTH (Real-Time Promise)
+        // If data is missing, we WANT it to be empty so user knows to run payroll.
         const payoutAggregate = await prisma.payrollRun.aggregate({
             _sum: {
                 netPay: true,
