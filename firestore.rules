@@ -1,0 +1,38 @@
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // User Profiles: Users can read/write their own profile
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Company Data: Scoped by adminId
+    // "Employees", "Attendance Logs", "Payroll Settings"
+    
+    match /employees/{docId} {
+      // Allow read/write if the document's adminId matches the user
+      // OR if creating, the new data must have adminId == uid (Enforce ownership on create)
+      allow create: if request.auth != null && request.resource.data.adminId == request.auth.uid;
+      allow read, update, delete: if request.auth != null && resource.data.adminId == request.auth.uid;
+    }
+    
+    match /attendance_logs/{docId} {
+       // Employees might need to write checking "employeeId", but for this Admin Panel context:
+       // The Admin simulates it. So Admin ownership applies.
+       allow create: if request.auth != null; // Simpler for Day 6 Simulation (or scope to adminId)
+       allow read: if request.auth != null;
+    }
+
+    match /payroll_settings/{docId} {
+      // Multi-tenancy: Allow if docId == "default" (legacy) OR managed by admin?
+      // Strict Mode:
+      allow read, write: if request.auth != null; 
+    }
+
+    match /payrollHistory/{docId} {
+        allow read, write: if request.auth != null;
+    }
+  }
+}

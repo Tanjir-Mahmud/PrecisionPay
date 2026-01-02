@@ -1,0 +1,156 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Users (Admins & Managers)
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String   // Hashed password
+  name      String?
+  role      String   @default("ADMIN") // RBAC: ADMIN, VIEWER, MANAGER
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  auditLogs AuditLog[]
+}
+
+// Global Company Configuration
+model CompanySettings {
+  id                String  @id @default("default") // Singleton row usually
+  companyName       String  @default("My Company")
+  
+  // Rules
+  standardWorkHours Int     @default(160)
+  overtimeMultiplier Float  @default(1.5)
+  taxBracketJson    String  @default("[]") // JSON string of brackets
+  country           String  @default("USA") // Selected Country Code
+  
+  // Attendance Rules
+  shiftStart        String  @default("09:00")
+  shiftEnd          String  @default("17:00")
+  gracePeriodMins   Int     @default(15)
+  maxLateFlags      Int     @default(3) // 3 lates = deduction
+  lateDeductionRatio Float  @default(0.5) // 0.5 days
+
+  // Performance Bonus
+  bonusThreshold    Int     @default(90) // Min score for bonus
+  bonusRate         Float   @default(5.0) // % of Base Salary
+  
+  updatedAt         DateTime @updatedAt
+}
+
+// Employees
+model Employee {
+  id              String   @id @default(uuid())
+  firstName       String
+  lastName        String
+  email           String   @unique
+  phone           String?
+  joiningDate     DateTime
+  designation     String
+  department      String
+  
+  // Financial Details
+  baseSalary      Float
+  paymentMethod   String   @default("BANK_TRANSFER") // BANK_TRANSFER, CHECK, CASH
+  bankAccount     String?
+  taxBracket      String?  // Optional override
+  
+  isActive        Boolean  @default(true)
+  performanceScore Int     @default(50) // 0-100 KPI Score
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  attendance      Attendance[]
+  payrollRuns     PayrollRun[]
+  leaveRequests   LeaveRequest[]
+}
+
+// Attendance Records
+model Attendance {
+  id          String   @id @default(uuid())
+  employeeId  String
+  date        DateTime
+  
+  // Times
+  clockIn     DateTime?
+  clockOut    DateTime?
+  
+  // Logic Flags
+  isLate      Boolean  @default(false)
+  lateMinutes Int      @default(0)
+  
+  status      String   @default("PRESENT") // PRESENT, ABSENT, LEAVE, HALF_DAY
+  
+  employee    Employee @relation(fields: [employeeId], references: [id])
+  
+  @@unique([employeeId, date])
+}
+
+// Leave Requests
+model LeaveRequest {
+  id          String   @id @default(uuid())
+  employeeId  String
+  startDate   DateTime
+  endDate     DateTime
+  reason      String?
+  status      String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  
+  employee    Employee @relation(fields: [employeeId], references: [id])
+}
+
+// Payroll Run History
+model PayrollRun {
+  id              String   @id @default(uuid())
+  employeeId      String
+  monthYear       String   // Format: "YYYY-MM"
+  
+  // Workflow Status
+  status          String   @default("DRAFT") // DRAFT, PENDING_REVIEW, APPROVED, PAID
+  flaggedForReview Boolean @default(false)
+  varianceFlag    Boolean  @default(false) // True if >15% variance
+  
+  // Calculated Components (Snapshot)
+  basePay         Float
+  hra             Float    // House Rent Allowance
+  transport       Float
+  overtimeHours   Float
+  overtimePay     Float
+  bonus           Float
+  
+  // Deductions
+  tax             Float
+  pf              Float    // Provident Fund
+  leaveDeduction  Float // Includes Late Deductions
+  
+  netPay          Float
+  
+  generatedAt     DateTime @default(now())
+  paidAt          DateTime? 
+  
+  employee        Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([employeeId, monthYear])
+}
+
+// Audit Trail for Compliance
+model AuditLog {
+  id              String   @id @default(uuid())
+  adminId         String
+  action          String   // e.g., "UPDATE_SALARY", "RUN_PAYROLL", "APPROVE_LEAVE"
+  targetDetails   String   // e.g., "Employee: John Doe"
+  previousValue   String?
+  newValue        String?
+  timestamp       DateTime @default(now())
+  
+  admin           User     @relation(fields: [adminId], references: [id])
+}
