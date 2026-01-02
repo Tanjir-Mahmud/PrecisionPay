@@ -1,5 +1,5 @@
 
-import { getAnalyticsData } from "./src/lib/analytics-engine";
+import { getPayrollAnalytics } from "./src/lib/analytics-engine";
 import { generatePDF } from "./src/lib/export-utils";
 
 // Mock window for client-side libs if needed, or stick to Node compatible checks
@@ -10,7 +10,7 @@ async function verifyDay5() {
     console.log("=== Verifying Day 5 Analytics Engine ===");
 
     try {
-        const data = await getAnalyticsData("USA");
+        const data = await getPayrollAnalytics("mock-admin-id");
         console.log("✅ Analytics Data Fetched");
         console.log("   - Variance Status:", data.variance.status);
         console.log("   - ROI Records:", data.roi.length);
@@ -24,7 +24,7 @@ async function verifyDay5() {
         }
 
         // Test Export Logic (Internal Check)
-        if (generatePDF) console.log("✅ Export Utilities Loaded");
+        if (typeof generatePDF === 'function') console.log("✅ Export Utilities Loaded");
 
     } catch (e) {
         console.error("❌ Verification Failed", e);

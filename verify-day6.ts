@@ -2,14 +2,13 @@
 // Verification for Day 6 is unique: We cannot easily script "Login" in Node without admin SDK or emulators.
 // We will verify that the files exist and the Context is exported correctly.
 
-import Layout from "./src/app/layout";
 import { AuthProvider } from "./src/context/AuthContext";
 import SidebarWrapper from "./src/components/SidebarWrapper";
 
 async function verifyDay6() {
     console.log("=== Verifying Day 6 Auth Module ===");
 
-    if (AuthProvider && SidebarWrapper) {
+    if (typeof AuthProvider === 'function' && typeof SidebarWrapper === 'function') {
         console.log("✅ Auth Components Exported Successfully");
     } else {
         console.error("❌ Auth Components Missing");
