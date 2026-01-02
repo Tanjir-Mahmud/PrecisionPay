@@ -1,3 +1,5 @@
+"use server";
+
 import { prisma } from "@/lib/prisma";
 import { startOfYear, subMonths, format, startOfMonth, endOfMonth } from "date-fns";
 
