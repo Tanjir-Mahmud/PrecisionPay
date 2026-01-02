@@ -72,7 +72,7 @@ export default function PayrollTable({ initialData }: Props) {
                 </button>
             </div>
 
-            <div className="bg-slate-900 border border-slate-700 rounded-xl overflow-hidden shadow-xl">
+            <div className="bg-slate-900 border border-slate-700 rounded-xl overflow-x-auto shadow-xl">
                 <table className="min-w-full divide-y divide-slate-800">
                     <thead className="bg-slate-950">
                         <tr>
