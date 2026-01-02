@@ -8,6 +8,7 @@ import { getAttendanceLogs, clockInEmployee } from "@/lib/attendance-engine";
 import { format } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { Employee } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ async function manualClockIn(formData: FormData) {
 export default async function AttendancePage() {
     const logs = await getAttendanceLogs();
 
-    let employees = [];
+    let employees: Employee[] = [];
     try {
         employees = await prisma.employee.findMany({
             where: { isActive: true },
