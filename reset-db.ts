@@ -34,11 +34,11 @@ async function clearCollections() {
                 continue;
             }
 
-            const deletePromises = snapshot.docs.map(d => deleteDoc(doc(db, colName, d.id)));
+            const deletePromises = snapshot.docs.map((d: any) => deleteDoc(doc(db, colName, d.id)));
             await Promise.all(deletePromises);
             console.log(`Deleted ${snapshot.size} documents.`);
         } catch (e) {
-            console.error(`Error cleaning ${colName}:`, e.message);
+            console.error(`Error cleaning ${colName}:`, (e as any).message);
         }
     }
 
