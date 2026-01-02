@@ -22,6 +22,8 @@ import DynamicLowAttendance from "@/components/dashboard/DynamicLowAttendance";
 import { getDashboardStats } from "@/lib/dashboard-service";
 import { format } from "date-fns";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
   const stats = await getDashboardStats();
 

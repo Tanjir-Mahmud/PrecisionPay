@@ -11,6 +11,8 @@ import PenaltyConfig from "@/components/settings/PenaltyConfig";
 import BonusConfig from "@/components/settings/BonusConfig";
 import DangerZone from "@/components/settings/DangerZone";
 
+export const dynamic = "force-dynamic";
+
 export default async function SettingsPage() {
     const settings = await getSettings();
 

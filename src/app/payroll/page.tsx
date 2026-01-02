@@ -8,6 +8,8 @@ import FirebasePayrollTable from "@/components/payroll/FirebasePayrollTable";
 import { getPendingPayrolls } from "@/lib/actions/payroll-actions";
 import RunPayrollButton from "@/components/payroll/RunPayrollButton";
 
+export const dynamic = "force-dynamic";
+
 export default async function PayrollPage() {
     const pendingData = await getPendingPayrolls();
 
