@@ -186,10 +186,11 @@ export default function PayrollTable({ initialData }: Props) {
                                             <button
                                                 onClick={() => handleApprove(run.id)}
                                                 disabled={isPending || run.flaggedForReview}
-                                                className="p-1.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 rounded-md transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                                className="inline-flex items-center px-3 py-1 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-md transition disabled:opacity-50 disabled:cursor-not-allowed text-xs font-semibold uppercase tracking-wider"
                                                 title="Pay & Finalize"
                                             >
-                                                <DollarSign className="w-4 h-4" />
+                                                <DollarSign className="w-3 h-3 mr-1" />
+                                                Pay
                                             </button>
                                         </td>
                                     </tr>
