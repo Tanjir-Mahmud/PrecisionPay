@@ -29,6 +29,7 @@ interface Employee {
 export default function EmployeeList({ initialData }: { initialData: Employee[] }) {
     const { user } = useAuth();
     const [isAddOpen, setIsAddOpen] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [isPending, startTransition] = useTransition();
 
     const handleDelete = async (id: string, email: string) => {
@@ -39,10 +40,6 @@ export default function EmployeeList({ initialData }: { initialData: Employee[] 
             const { deleteDoc, doc, collection, getDocs, query, where } = await import("firebase/firestore");
             const { db } = await import("@/lib/firebase");
 
-            // Find doc by email since ID might differ between SQL and Fire (unless we synced IDs, assume email is unique key)
-            // Or if we stored SQL ID in Firestore. For Day 2 speed, let's query by email if available, or just rely on SQL action if user mainly looks at Dashboard.
-            // PROMPT REQ: "Delete the document from Firestore".
-            // Since we don't have the Firestore Doc ID handy in this SQL list, we must query it.
             const q = query(collection(db, "employees"), where("email", "==", email));
             const snap = await getDocs(q);
             snap.forEach(async (d) => await deleteDoc(doc(db, "employees", d.id)));
@@ -71,45 +68,44 @@ export default function EmployeeList({ initialData }: { initialData: Employee[] 
         } catch (e) { console.error(e); }
 
         // Server Action (if exists for status, else just UI opt update or ignore SQL for Day 2 specific logic)
-        // Ignoring SQL update for status to keep it simple as prompt focuses on logic engine exclusion
         location.reload();
     };
 
-    const handleAddSubmit = async (formData: FormData) => {
+    const handleAddSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        const formData = new FormData(e.currentTarget);
 
-        // Firebase Persistence (Day 2 Challenge)
-        // Dynamic import to ensure client-side execution context for Firebase SDK if needed, though top-level is fine in Client Component
-        const { collection, addDoc, serverTimestamp } = await import("firebase/firestore");
-        const { db, auth } = await import("@/lib/firebase"); // Use initialized instances
-        const { signInAnonymously } = await import("firebase/auth");
+        if (isSubmitting) return;
+        setIsSubmitting(true);
 
-        // Ensure Auth for Rules
-        if (!auth.currentUser) {
-            try {
-                await signInAnonymously(auth);
-            } catch (authError) {
-                console.warn("Auto-signin failed", authError);
-            }
-        }
-
-        const firstName = formData.get("firstName") as string;
-        const lastName = formData.get("lastName") as string;
-        const email = formData.get("email") as string;
-        const department = formData.get("department") as string;
-        const designation = formData.get("designation") as string;
-        const baseSalary = parseFloat(formData.get("baseSalary") as string);
-        const joiningDate = formData.get("joiningDate") as string;
-
-        // Validation
-        if (!email.includes("@") || baseSalary <= 0) {
-            alert("Invalid Email or Salary");
-            return;
-        }
-
-        // 1. ADD TO FIRESTORE (Source of Truth)
         try {
+            // Firebase Persistence (Day 2 Challenge)
+            const { collection, addDoc } = await import("firebase/firestore");
+            const { db, auth } = await import("@/lib/firebase"); // Use initialized instances
+            const { signInAnonymously } = await import("firebase/auth");
+
+            // Ensure Auth for Rules
+            if (!auth.currentUser) {
+                try {
+                    await signInAnonymously(auth);
+                } catch (authError) {
+                    console.warn("Auto-signin failed", authError);
+                }
+            }
+
+            const email = formData.get("email") as string;
+            const baseSalary = parseFloat(formData.get("baseSalary") as string);
+
+            // Validation
+            if (!email.includes("@") || baseSalary <= 0) {
+                alert("Invalid Email or Salary");
+                setIsSubmitting(false);
+                return;
+            }
+
+            // 1. ADD TO FIRESTORE (Source of Truth)
             if (!user) throw new Error("No User");
-            const docRef = await addDoc(collection(db, "employees"), {
+            await addDoc(collection(db, "employees"), {
                 firstName: formData.get("firstName"),
                 lastName: formData.get("lastName"),
                 email: formData.get("email"),
@@ -120,25 +116,19 @@ export default function EmployeeList({ initialData }: { initialData: Employee[] 
                 joinedAt: new Date().toISOString(),
                 adminId: user.uid // Scoping to Current Admin
             });
-            console.log("Firestore Employee Added:", docRef.id);
+
+            // 2. Dual-write to Postgres
+            await addEmployee(formData);
+
+            setIsAddOpen(false);
+            // Optional: location.reload(); if needed, but State update usually preferred or letting RevalidatePath handle it.
+
         } catch (e: any) {
-            console.error("Firebase Create Error:", e);
-            alert("Error saving to cloud: " + e.message);
-            return; // Stop if FS fails
+            console.error("Error adding employee:", e);
+            alert("Error saving: " + e.message);
+        } finally {
+            setIsSubmitting(false);
         }
-
-        setIsAddOpen(false);
-        // location.reload(); // Allow Real-time listener to pick it up instead of forcing reload if on dashboard, but here on list we might want to reload or listen.
-        // For Employee List, we still read from SQL in `initialData`. 
-        // To make the LIST update, we would need a listener here too or dual-write. 
-        // For now, I'll trigger a reload to show it if we did dual-write, but since I am writing ONLY to Firebase per prompt "Save this data in a Firestore collection", 
-        // the SQL list won't update unless I dual write. 
-        // The prompt says "Transform... by connecting... to Firebase". It doesn't explicitly delete SQL.
-        // I will DO DUAL WRITE to ensure the app remains consistent across views (Dashboard sees Firebase, List sees SQL).
-
-        await addEmployee(formData); // Dual-write to keep SQL synced for the List View
-
-
     };
 
     return (
@@ -234,7 +224,7 @@ export default function EmployeeList({ initialData }: { initialData: Employee[] 
                             Add New Employee
                         </h3>
 
-                        <form action={handleAddSubmit} className="space-y-4">
+                        <form onSubmit={handleAddSubmit} className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-xs uppercase text-slate-500 mb-1">First Name</label>
@@ -289,10 +279,14 @@ export default function EmployeeList({ initialData }: { initialData: Employee[] 
                                 </button>
                                 <button
                                     type="submit"
-                                    className="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                                    disabled={isSubmitting}
+                                    className={clsx(
+                                        "flex items-center text-white px-4 py-2 rounded-lg transition-colors",
+                                        isSubmitting ? "bg-blue-600/50 cursor-wait" : "bg-blue-600 hover:bg-blue-700"
+                                    )}
                                 >
                                     <Save className="w-4 h-4 mr-2" />
-                                    Save Employee
+                                    {isSubmitting ? "Saving..." : "Save Employee"}
                                 </button>
                             </div>
                         </form>
