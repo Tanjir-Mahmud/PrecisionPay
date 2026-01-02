@@ -1,9 +1,5 @@
-"use server";
-
-import { PrismaClient } from "@prisma/client";
 import { revalidatePath } from "next/cache";
-
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
 
 export async function addEmployee(formData: FormData) {
     const firstName = formData.get("firstName") as string;

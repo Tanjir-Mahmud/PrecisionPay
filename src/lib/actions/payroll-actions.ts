@@ -1,11 +1,9 @@
 "use server";
 
-import { PrismaClient } from "@prisma/client";
 import { format, subMonths } from "date-fns";
 import { revalidatePath } from "next/cache";
 import { calculatePayroll } from "@/lib/payroll";
-
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
 
 // ... existing interfaces ...
 

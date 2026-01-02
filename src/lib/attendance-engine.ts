@@ -1,10 +1,8 @@
 "use server";
 
-import { PrismaClient } from "@prisma/client";
 import { format, differenceInMinutes, parse, addMinutes } from "date-fns";
 import { revalidatePath } from "next/cache";
-
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
 
 // --- Types ---
 export interface AttendanceResult {

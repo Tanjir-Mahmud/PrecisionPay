@@ -1,7 +1,7 @@
-
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
+import { prisma } from "@/lib/prisma";
 
 interface ExportRow {
     name: string;
@@ -24,8 +24,8 @@ export function generatePDF(data: ExportRow[], companyName: string, region: stri
 
     doc.setFontSize(10);
     doc.setTextColor(100);
-    doc.text(`Payroll Summary - ${region}`, 14, 28);
-    doc.text(`Date: ${date}`, 14, 33);
+    doc.text(`Payroll Summary - ${region} `, 14, 28);
+    doc.text(`Date: ${date} `, 14, 33);
 
     // 2. Table Data
     const tableRows = data.map(row => [
@@ -54,7 +54,7 @@ export function generatePDF(data: ExportRow[], companyName: string, region: stri
 
     doc.setFontSize(12);
     doc.setTextColor(0);
-    doc.text(`Total Payout: ${totalNet.toLocaleString()}`, 14, finalY);
+    doc.text(`Total Payout: ${totalNet.toLocaleString()} `, 14, finalY);
 
     // Save
     doc.save(`Payroll_${date.replace(/\//g, "-")}.pdf`);
