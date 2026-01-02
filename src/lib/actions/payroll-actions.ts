@@ -87,7 +87,13 @@ export interface PayrollWithVariance {
     monthYear: string;
     netPay: number;
     basePay: number;
+    hra: number;
+    transport: number;
+    overtimePay: number;
     bonus: number;
+    tax: number;
+    pf: number;
+    leaveDeduction: number;
     status: string;
     flaggedForReview: boolean;
     variancePct: number; // Percentage change from last month (e.g. 15.5)
@@ -139,7 +145,13 @@ export async function getPendingPayrolls(): Promise<PayrollWithVariance[]> {
             monthYear: run.monthYear,
             netPay: run.netPay,
             basePay: run.basePay,
+            hra: run.hra,
+            transport: run.transport,
+            overtimePay: run.overtimePay,
             bonus: run.bonus,
+            tax: run.tax,
+            pf: run.pf,
+            leaveDeduction: run.leaveDeduction,
             status: run.status,
             flaggedForReview: run.flaggedForReview,
             variancePct: parseFloat(variance.toFixed(1))
