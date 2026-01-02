@@ -41,6 +41,7 @@ model CompanySettings {
   gracePeriodMins   Int     @default(15)
   maxLateFlags      Int     @default(3) // 3 lates = deduction
   lateDeductionRatio Float  @default(0.5) // 0.5 days
+  latePenaltyAmount  Float  @default(0.0) // Fixed deduction amount (e.g. $50)
 
   // Performance Bonus
   bonusThreshold    Int     @default(90) // Min score for bonus
