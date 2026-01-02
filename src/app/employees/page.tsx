@@ -1,15 +1,20 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import EmployeeList from "@/components/employees/EmployeeList";
 
 export const dynamic = 'force-dynamic';
 
 export default async function EmployeesPage() {
-    const prisma = new PrismaClient();
-
-    const employees = await prisma.employee.findMany({
-        where: { isActive: true },
-        orderBy: { createdAt: 'desc' }
-    });
+    let employees = [];
+    try {
+        employees = await prisma.employee.findMany({
+            where: { isActive: true },
+            orderBy: { createdAt: 'desc' }
+        });
+    } catch (e) {
+        console.error("Failed to fetch employees (likely DB connection issue):", e);
+        // Fallback or empty list
+        employees = [];
+    }
 
     return <EmployeeList initialData={employees} />;
 }
