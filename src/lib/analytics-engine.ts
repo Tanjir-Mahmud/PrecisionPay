@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { startOfYear, subMonths, format, startOfMonth, endOfMonth } from "date-fns";
-import { format as fmtCurrency } from "@/lib/utils"; // Assuming utils exists or just use manual
 
 export interface DashboardAnalytics {
     variance: {
