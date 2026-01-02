@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { getSettings } from "@/lib/actions/settings-actions";
 import { getTaxReport, TaxReport } from "@/lib/tax-engine";
 
 export async function calculateTaxDetails(taxableIncome: number): Promise<TaxReport> {
