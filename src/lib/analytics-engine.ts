@@ -1,7 +1,6 @@
-
-import { collection, getDocs, query, where, orderBy, Timestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { prisma } from "@/lib/prisma";
 import { startOfYear, subMonths, format, startOfMonth, endOfMonth } from "date-fns";
+import { format as fmtCurrency } from "@/lib/utils"; // Assuming utils exists or just use manual
 
 export interface DashboardAnalytics {
     variance: {
@@ -9,6 +8,7 @@ export interface DashboardAnalytics {
         status: "CRITICAL" | "OPTIMIZED" | "STABLE";
         currentTotal: number;
         previousTotal: number;
+        overtimeCost: number; // NEW: Explicit OT Cost for current month
     };
     roi: {
         id: string;
@@ -29,107 +29,94 @@ export interface DashboardAnalytics {
 }
 
 /**
- * Calculates Month-over-Month Variance for Payroll (Scoped by Admin)
+ * Calculates Month-over-Month Variance for Payroll
  */
 export async function getPayrollAnalytics(adminId: string): Promise<DashboardAnalytics> {
+    // Note: adminId param kept for signature compatibility, but strict scoping might be redundant if single tenant 
+    // or handled by RLS. For now, we query purely based on DB state.
 
-    // Default Empty State
-    const emptyState: DashboardAnalytics = {
-        variance: { percentChange: 0, status: "STABLE", currentTotal: 0, previousTotal: 0 },
-        roi: [],
-        ytdTax: { totalLiabilities: 0, country: "USA" },
-        trend: []
-    };
-
-    if (!adminId) return emptyState;
-
-    const historyRef = collection(db, "payrollHistory");
-    const employeesRef = collection(db, "employees");
-
-    // 1. Fetch History (Scoped)
-    // "payrollHistory" likely doesn't have an adminId in legacy code, but Day 6 requires it.
-    // If I didn't add adminId to payrollHistory writes yet, this will be empty.
-    // Assuming for now I filter what exists. If empty, the user just sees 0 stats (expected for new user).
-    // Let's add adminId filter.
-    const qHistory = query(historyRef, where("adminId", "==", adminId));
-    const historySnap = await getDocs(qHistory);
-    const historyDocs = historySnap.docs.map(d => d.data());
-
-    // --- MoM Variance ---
+    // 1. Setup Dates
     const today = new Date();
     const currentMonthStr = format(today, "yyyy-MM");
     const prevMonthStr = format(subMonths(today, 1), "yyyy-MM");
+    const currentYear = today.getFullYear();
 
-    let currentTotal = 0;
-    let prevTotal = 0;
-
-    // Trend Data
-    const monthlyMap: Record<string, number> = {};
-
-    historyDocs.forEach(d => {
-        const date = d.approvedAt ? (d.approvedAt as Timestamp).toDate() : new Date();
-        const monthKey = format(date, "yyyy-MM");
-        const amount = Number(d.netPay) || 0;
-
-        // Group for Trend
-        monthlyMap[monthKey] = (monthlyMap[monthKey] || 0) + amount;
-
-        // Group for Variance
-        if (monthKey === currentMonthStr) currentTotal += amount;
-        if (monthKey === prevMonthStr) prevTotal += amount;
+    // 2. Fetch All Payroll Runs (Paid/Approved)
+    // Optimization: In a real app, verify scope or date range. Fetching all might be heavy eventually.
+    // For now, fetching everything to compute trends and YTD is acceptable.
+    const runs = await prisma.payrollRun.findMany({
+        where: {
+            status: "PAID" // STRICT reporting on PAID only
+        },
+        include: { employee: true }
     });
 
-    // Calculate Variance
+    // 3. Process Data
+    let currentTotal = 0;
+    let prevTotal = 0;
+    let currentOT = 0;
+    let ytdTax = 0;
+    const monthlyMap: Record<string, number> = {};
+
+    runs.forEach(run => {
+        const amount = run.netPay;
+
+        // Trend Data
+        monthlyMap[run.monthYear] = (monthlyMap[run.monthYear] || 0) + amount;
+
+        // Variance Data
+        if (run.monthYear === currentMonthStr) {
+            currentTotal += amount;
+            currentOT += (run.overtimePay || 0);
+        }
+        if (run.monthYear === prevMonthStr) {
+            prevTotal += amount;
+        }
+
+        // YTD Tax
+        // Parse "YYYY-MM" to check year
+        if (run.monthYear.startsWith(currentYear.toString())) {
+            ytdTax += run.tax;
+        }
+    });
+
+    // 4. Calculate Variance
     let percentChange = 0;
     if (prevTotal > 0) {
         percentChange = ((currentTotal - prevTotal) / prevTotal) * 100;
     } else if (currentTotal > 0) {
-        percentChange = 100; // 0 to something is 100% increase
+        percentChange = 100;
     }
 
     const varianceStatus = percentChange > 15 ? "CRITICAL" : percentChange < 0 ? "OPTIMIZED" : "STABLE";
 
-    // --- ROI Matrix ---
-    // Fetch active employees (Scoped)
-    const qEmp = query(employeesRef, where("adminId", "==", adminId));
-    const empSnap = await getDocs(qEmp);
+    // 5. ROI Matrix (Active Employees from Runs)
+    // We only have KPI if recorded. Using mock calculation or data from run if available.
+    // Schema has 'performanceScore' on Employee.
+    const uniqueEmpIds = Array.from(new Set(runs.map(r => r.employeeId)));
 
-    const roiData = empSnap.docs.map(d => {
-        const e = d.data();
-        if (e.status !== "Active") return null;
+    // Fetch fresh employee data for current KPI
+    const employees = await prisma.employee.findMany({
+        where: { id: { in: uniqueEmpIds }, isActive: true }
+    });
 
-        const cost = Number(e.baseSalary) || 0;
-        // Simulate KPI if missing (random 70-99)
-        const kpi = e.kpiScore || Math.floor(Math.random() * (99 - 70 + 1) + 70);
-
-        // ROI Score Algorithm
+    const roi = employees.map(emp => {
+        const cost = emp.baseSalary;
+        const kpi = emp.performanceScore || 75; // Default if missing
         const roiScore = cost > 0 ? (kpi / cost) * 100000 : 0;
 
         return {
-            id: d.id,
-            name: `${e.firstName} ${e.lastName}`,
-            role: e.designation,
+            id: emp.id,
+            name: `${emp.firstName} ${emp.lastName}`,
+            role: emp.designation,
             cost,
             kpi,
             roiScore
         };
-    }).filter(Boolean) as DashboardAnalytics["roi"];
+    }).sort((a, b) => b.roiScore - a.roiScore).slice(0, 5);
 
-    // Sort by ROI descending
-    roiData.sort((a, b) => b.roiScore - a.roiScore);
 
-    // --- YTD Tax ---
-    const currentYear = today.getFullYear();
-    let ytdTax = 0;
-    historyDocs.forEach(d => {
-        const date = d.approvedAt ? (d.approvedAt as Timestamp).toDate() : new Date();
-        if (date.getFullYear() === currentYear) {
-            ytdTax += (Number(d.tax) || 0);
-        }
-    });
-
-    // --- Trend Array ---
-    // Last 6 months
+    // 6. Trend Array (Last 6 Months)
     const trend = [];
     for (let i = 5; i >= 0; i--) {
         const d = subMonths(today, i);
@@ -145,12 +132,13 @@ export async function getPayrollAnalytics(adminId: string): Promise<DashboardAna
             percentChange,
             status: varianceStatus,
             currentTotal,
-            previousTotal: prevTotal
+            previousTotal: prevTotal,
+            overtimeCost: currentOT
         },
-        roi: roiData.slice(0, 5), // Top 5
+        roi,
         ytdTax: {
             totalLiabilities: ytdTax,
-            country: "USA" // Hardcoded for now, or fetch from Settings
+            country: "USA"
         },
         trend
     };

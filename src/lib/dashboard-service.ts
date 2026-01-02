@@ -18,12 +18,12 @@ export async function getDashboardStats() {
         // "Smart Dashboard" - If current month has no data, find the latest month that DOES.
         // This ensures the charts are never empty if we have history.
         const currentMonthCheck = await prisma.payrollRun.findFirst({
-            where: { monthYear: targetMonth, status: { in: ["APPROVED", "PAID"] } }
+            where: { monthYear: targetMonth, status: "PAID" }
         });
 
         if (!currentMonthCheck) {
             const latestRun = await prisma.payrollRun.findFirst({
-                where: { status: { in: ["APPROVED", "PAID"] } },
+                where: { status: "PAID" },
                 orderBy: { monthYear: 'desc' }
             });
             if (latestRun) {
@@ -41,7 +41,7 @@ export async function getDashboardStats() {
             },
             where: {
                 monthYear: targetMonth,
-                status: { in: ["APPROVED", "PAID"] }
+                status: "PAID"
             }
         });
 

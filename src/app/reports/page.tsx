@@ -114,6 +114,13 @@ export default function ReportsPage() {
                     <p className="text-xs text-slate-500 mt-2">
                         Currently ${variance.currentTotal.toLocaleString()} vs ${variance.previousTotal.toLocaleString()} last month.
                     </p>
+                    {/* NEW: Overtime Cost Metric */}
+                    <div className="mt-4 pt-3 border-t border-slate-700/50 flex justify-between items-center">
+                        <span className="text-xs text-slate-400">Overtime Costs (MTD)</span>
+                        <span className="text-sm font-mono font-bold text-amber-400">
+                            ${variance.overtimeCost.toLocaleString()}
+                        </span>
+                    </div>
                 </div>
 
                 <div className="glass-card p-6 border-l-4 border-amber-500">

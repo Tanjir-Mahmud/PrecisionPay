@@ -87,6 +87,7 @@ export interface PayrollWithVariance {
     basePay: number;
     hra: number;
     transport: number;
+    overtimeHours: number; // Added
     overtimePay: number;
     bonus: number;
     tax: number;
@@ -146,6 +147,7 @@ export async function getPendingPayrolls(): Promise<PayrollWithVariance[]> {
                 basePay: run.basePay,
                 hra: run.hra,
                 transport: run.transport,
+                overtimeHours: run.overtimeHours, // Added
                 overtimePay: run.overtimePay,
                 bonus: run.bonus,
                 tax: run.tax,
@@ -165,7 +167,11 @@ export async function getPendingPayrolls(): Promise<PayrollWithVariance[]> {
 export async function approvePayroll(id: string) {
     await prisma.payrollRun.update({
         where: { id },
-        data: { status: "APPROVED", flaggedForReview: false }
+        data: {
+            status: "PAID",
+            flaggedForReview: false,
+            paidAt: new Date() // Record timestamp of payment
+        }
     });
     revalidatePath("/payroll");
     revalidatePath("/");
@@ -184,15 +190,47 @@ export async function flagPayroll(id: string) {
 export async function bulkApprove() {
     const currentMonth = format(new Date(), "yyyy-MM");
 
-    // Approve all that are NOT flagged
+    // Pay all that are NOT flagged
     await prisma.payrollRun.updateMany({
         where: {
             monthYear: currentMonth,
             status: { in: ["DRAFT", "PENDING_REVIEW"] },
             flaggedForReview: false
         },
-        data: { status: "APPROVED" }
+        data: {
+            status: "PAID",
+            paidAt: new Date()
+        }
     });
     revalidatePath("/payroll");
     revalidatePath("/");
+}
+
+export async function updateOvertime(id: string, hours: number) {
+    const run = await prisma.payrollRun.findUnique({ where: { id }, include: { employee: true } });
+    if (!run) return;
+
+    // Recalculate everything with new OT
+    // Note: In a real app we'd fetch actual unpaid leave again, but here we assume existing deduction implicitly maps to days
+    // Reverse calc days from deduction? Or just fetch fresh?
+    // Let's simplified: 0 unpaid leave for this manual adjustment or keep existing ratio?
+    // Better: We need to know 'unpaidLeaveDays'. 
+    // Proxy: run.leaveDeduction / (base / 30).
+    const dailyRate = run.basePay / 30;
+    const estimatedUnpaidDays = run.leaveDeduction / dailyRate;
+
+    const result = calculatePayroll(run.basePay, hours, estimatedUnpaidDays, "USA", run.bonus); // Default Country/Bonus preserved
+
+    await prisma.payrollRun.update({
+        where: { id },
+        data: {
+            overtimeHours: hours,
+            overtimePay: result.earnings.overtimePay,
+            tax: result.deductions.tax,
+            pf: result.deductions.pf,
+            netPay: result.netPay,
+            // Don't change status, just values
+        }
+    });
+    revalidatePath("/payroll");
 }
