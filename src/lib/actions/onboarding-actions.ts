@@ -1,8 +1,7 @@
 "use server";
 
 import { db } from "@/lib/firebase"; // Firestore
-import { PrismaClient } from "@prisma/client";
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
 import { doc, setDoc } from "firebase/firestore";
 import { revalidatePath } from "next/cache";
 

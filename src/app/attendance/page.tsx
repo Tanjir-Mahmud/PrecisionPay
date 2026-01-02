@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { getAttendanceLogs, clockInEmployee } from "@/lib/attendance-engine";
 import { format } from "date-fns";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 
 export const dynamic = "force-dynamic";
@@ -27,12 +27,18 @@ async function manualClockIn(formData: FormData) {
 }
 
 export default async function AttendancePage() {
-    const prisma = new PrismaClient();
     const logs = await getAttendanceLogs();
-    const employees = await prisma.employee.findMany({
-        where: { isActive: true },
-        orderBy: { firstName: 'asc' }
-    });
+
+    let employees = [];
+    try {
+        employees = await prisma.employee.findMany({
+            where: { isActive: true },
+            orderBy: { firstName: 'asc' }
+        });
+    } catch (e) {
+        console.error("Failed to fetch employees for attendance (DB Error):", e);
+        employees = [];
+    }
 
     return (
         <div className="space-y-8">
