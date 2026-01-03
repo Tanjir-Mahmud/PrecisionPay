@@ -25,72 +25,82 @@ import { format } from "date-fns";
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const stats = await getDashboardStats();
+  try {
+    const stats = await getDashboardStats();
 
-  // Format currency
-  const fmt = (n: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: stats.compliance.currency === "$" ? "USD" : stats.compliance.country === "UK" ? "GBP" : stats.compliance.country === "BD" ? "BDT" : "EUR",
-      maximumFractionDigits: 0
-    }).format(n).replace("BDT", "৳").replace("USD", "$"); // Simple manual override for display if needed
-  };
+    // Format currency
+    const fmt = (n: number) => {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: stats.compliance.currency === "$" ? "USD" : stats.compliance.country === "UK" ? "GBP" : stats.compliance.country === "BD" ? "BDT" : "EUR",
+        maximumFractionDigits: 0
+      }).format(n).replace("BDT", "৳").replace("USD", "$");
+    };
 
-  const today = format(new Date(), "MMMM d, yyyy");
+    const today = format(new Date(), "MMMM d, yyyy");
 
-  return (
-    <div className="space-y-6">
-      {/* Header Row: Context & Tools */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
-        <div className="flex items-center space-x-4">
-          <div className="bg-slate-800/50 p-2 rounded-lg text-slate-400">
-            <Calendar className="w-5 h-5" />
+    return (
+      <div className="space-y-6">
+        {/* Header Row: Context & Tools */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-4 md:space-y-0">
+          <div className="flex items-center space-x-4">
+            <div className="bg-slate-800/50 p-2 rounded-lg text-slate-400">
+              <Calendar className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-white">Dashboard Overview</h1>
+              <p className="text-xs text-slate-500">{today}</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-white">Dashboard Overview</h1>
-            <p className="text-xs text-slate-500">{today}</p>
+          <div className="flex items-center space-x-3">
+            <ComplianceBadge
+              country={stats.compliance.country}
+              year={stats.compliance.taxYear}
+              currency={stats.compliance.currency}
+            />
+
           </div>
         </div>
-        <div className="flex items-center space-x-3">
-          <ComplianceBadge
-            country={stats.compliance.country}
-            year={stats.compliance.taxYear}
-            currency={stats.compliance.currency}
-          />
 
-        </div>
-      </div>
+        {/* Top Stats Row (Real-Time Postgres Engine) */}
+        <RealTimeStats />
 
-      {/* Top Stats Row (Real-Time Firebase Engine) */}
-      <RealTimeStats />
+        {/* Audit & Insights Row */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Pro Auditor Widget */}
+          <AuditSummary summary={stats.auditSummary} />
 
-      {/* Fallback/Legacy View (Hidden or Removed) - Replaced by RealTimeStats */}
-      {/* <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"> ... </div> */}
+          {/* Financial Distribution */}
+          <ExpenseDonut expenses={stats.expenses} />
 
-      {/* Audit & Insights Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Pro Auditor Widget */}
-        <AuditSummary summary={stats.auditSummary} />
-
-        {/* Financial Distribution */}
-        <ExpenseDonut expenses={stats.expenses} />
-
-        {/* Enhanced Performers (Bonus Eligible) */}
-        <PerformersCard />
-      </div>
-
-      {/* Bottom Grid: Trends & Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="lg:col-span-2">
-          <PayrollTrendChart />
+          {/* Enhanced Performers (Bonus Eligible) */}
+          <PerformersCard />
         </div>
 
-        {/* Day 4 Dynamic Modules */}
-        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-          <AttendanceLogger />
-          <DynamicLowAttendance />
+        {/* Bottom Grid: Trends & Activity */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="lg:col-span-2">
+            <PayrollTrendChart />
+          </div>
+
+          {/* Day 4 Dynamic Modules */}
+          <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <AttendanceLogger />
+            <DynamicLowAttendance />
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  } catch (error) {
+    console.error("Critical Dashboard Crash:", error);
+    return (
+      <div className="p-10 text-center text-red-400">
+        <h2 className="text-xl font-bold">System Error</h2>
+        <p>Failed to load dashboard. Please check server logs.</p>
+        <pre className="mt-4 text-xs bg-slate-900 p-4 rounded overflow-auto text-left mx-auto max-w-lg">
+          {String(error)}
+        </pre>
+      </div>
+    );
+  }
 }
