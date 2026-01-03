@@ -119,10 +119,16 @@ export async function getDashboardStats() {
         });
         auditSummary.attendanceAlerts = lateEmployees.length;
 
+        // 5. Total Employees
+        const employeesCount = await prisma.employee.count({
+            where: { isActive: true }
+        });
+
         return {
             totalPayout: currentPayout,
             taxLiabilities: expenses.taxes,
             pendingPayslips: pendingCount,
+            employeesCount,
             payoutChange,
             compliance,
             expenses,
@@ -136,6 +142,7 @@ export async function getDashboardStats() {
             totalPayout: 125000,
             taxLiabilities: 24000,
             pendingPayslips: 3,
+            employeesCount: 12,
             payoutChange: "+12.5% vs Last Month",
             compliance: { country: "USA", currency: "$", taxYear: "FY2025" },
             expenses: { netSalaries: 85000, taxes: 24000, benefits: 12000, bonuses: 4000 },
