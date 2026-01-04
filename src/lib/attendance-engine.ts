@@ -3,6 +3,7 @@
 import { format, differenceInMinutes, parse, addMinutes } from "date-fns";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { verifyAuth } from "@/lib/firebase-admin";
 
 // --- Types ---
 export interface AttendanceResult {
@@ -23,23 +24,29 @@ function parseTimeToday(timeStr: string): Date {
  * Process a Clock-In Event
  * Checks shift rules, grace period, and updates late flags.
  */
-export async function clockInEmployee(employeeId: string, clockInTime: Date): Promise<AttendanceResult> {
+export async function clockInEmployee(idToken: string, employeeId: string, clockInTime: Date): Promise<AttendanceResult> {
+    const userId = await verifyAuth(idToken);
+    if (!userId) throw new Error("Unauthorized");
+
     const today = new Date();
-    const dateStr = format(today, 'yyyy-MM-dd');
+    // 1. Fetch Company Settings for this User
+    const settings = await prisma.companySettings.findUnique({ where: { userId } });
 
-    // 1. Fetch Company Settings & Employee
-    const settings = await prisma.companySettings.findUnique({ where: { id: 'default' } });
-    if (!settings) throw new Error("Company Settings not configured");
+    // Fallback defaults if no settings configured yet
+    const shiftStartStr = settings?.shiftStart || "09:00";
+    const gracePeriodMins = settings?.gracePeriodMins || 15;
+    const maxLateFlags = settings?.maxLateFlags || 3;
 
-    const employee = await prisma.employee.findUnique({
-        where: { id: employeeId },
+    // Verify employee belongs to this user
+    const employee = await prisma.employee.findFirst({
+        where: { id: employeeId, userId },
         include: { attendance: true }
     });
-    if (!employee) return { success: false, message: "Employee not found" };
+    if (!employee) return { success: false, message: "Employee not found or unauthorized" };
 
     // 2. Determine Shift & Logic
-    const shiftStart = parseTimeToday(settings.shiftStart);
-    const graceLimit = addMinutes(shiftStart, settings.gracePeriodMins);
+    const shiftStart = parseTimeToday(shiftStartStr);
+    const graceLimit = addMinutes(shiftStart, gracePeriodMins);
 
     // Calculate Lateness
     let isLate = false;
@@ -51,26 +58,10 @@ export async function clockInEmployee(employeeId: string, clockInTime: Date): Pr
     }
 
     // 3. Check Existing Record
-    const existing = await prisma.attendance.findUnique({
-        where: {
-            employeeId_date: {
-                employeeId,
-                date: today // Ideally strip time, but Prisma DateTime vs JS Date needs care (using dateStr for logic usually better but utilizing native Date here)
-            }
-        }
-    });
-
-    // Simplification: In a real app we'd strip time from 'today' for the query. 
-    // For this engine we assume 'date' field in DB stores midnight.
-    // Let's rely on upsert logic in a real database or assume 'today' is set to midnight by caller or here.
+    // We treat 'userId' implicitly via 'employeeId' scope
     const startOfDay = new Date(today.setHours(0, 0, 0, 0));
 
     // 4. Calculate Total Flags for Deduction Logic
-    // We need to count *previous* lates + this one if late.
-    // Efficiently: Count records where isLate=true for this employee in current month/period.
-
-    // For simplicity of this module: 3 lates = deduction.
-    // We'll count total lates this month.
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     const lateCount = await prisma.attendance.count({
         where: {
@@ -83,10 +74,8 @@ export async function clockInEmployee(employeeId: string, clockInTime: Date): Pr
     const currentFlagCount = isLate ? lateCount + 1 : lateCount;
     let penaltyApplied = false;
 
-    // Rule: Every 3rd late mark triggers deduction
-    if (isLate && currentFlagCount % settings.maxLateFlags === 0) {
+    if (isLate && currentFlagCount % maxLateFlags === 0) {
         penaltyApplied = true;
-        // In a real app, we'd insert a deduction record into PayrollRun here or mark attendance status as HALF_DAY
     }
 
     // 5. Save Record
@@ -127,8 +116,16 @@ export async function clockInEmployee(employeeId: string, clockInTime: Date): Pr
 /**
  * Fetch Attendance Logs for UI
  */
-export async function getAttendanceLogs() {
+export async function getAttendanceLogs(idToken: string) {
+    const userId = await verifyAuth(idToken);
+    if (!userId) return [];
+
     return await prisma.attendance.findMany({
+        where: {
+            employee: {
+                userId: userId // Ensure we only see logs for ONE user's employees
+            }
+        },
         orderBy: { date: 'desc' },
         take: 50,
         include: { employee: true }
