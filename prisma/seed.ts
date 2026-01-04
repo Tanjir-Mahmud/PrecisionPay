@@ -6,12 +6,14 @@ const prisma = new PrismaClient();
 async function main() {
     console.log('🌱 Starting Seed...');
 
+    const ADMIN_ID = "default_admin_id"; // Seed specific admin ID
+
     // 1. Company Settings
     const settings = await prisma.companySettings.upsert({
-        where: { id: 'default' },
+        where: { userId: ADMIN_ID }, // Updated unique constraint
         update: {},
         create: {
-            id: 'default',
+            userId: ADMIN_ID, // [NEW]
             companyName: 'PrecisionPay Inc.',
             standardWorkHours: 160,
             overtimeMultiplier: 1.5,
@@ -46,12 +48,18 @@ async function main() {
 
     for (const emp of employeesData) {
         const employee = await prisma.employee.upsert({
-            where: { email: emp.email },
+            where: {
+                email_userId: { // Updated compound unique
+                    email: emp.email,
+                    userId: ADMIN_ID
+                }
+            },
             update: {},
             create: {
                 firstName: emp.firstName,
                 lastName: emp.lastName,
                 email: emp.email,
+                userId: ADMIN_ID, // [NEW]
                 joiningDate: new Date('2024-01-15'),
                 designation: emp.designation,
                 department: emp.dept,
