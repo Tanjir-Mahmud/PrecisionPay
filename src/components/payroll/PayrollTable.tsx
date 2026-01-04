@@ -15,12 +15,14 @@ import { PayrollWithVariance, approvePayroll, flagPayroll, bulkApprove, updateOv
 import { useState, useTransition } from "react";
 import clsx from "clsx";
 import TaxWaterfall from "./TaxWaterfall";
+import { useAuth } from "@/context/AuthContext";
 
 interface Props {
     initialData: PayrollWithVariance[];
 }
 
 export default function PayrollTable({ initialData }: Props) {
+    const { user } = useAuth();
     const [isPending, startTransition] = useTransition();
     const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -33,8 +35,12 @@ export default function PayrollTable({ initialData }: Props) {
     };
 
     const handleBulkApprove = () => {
+        if (!user) return;
         if (confirm("Are you sure you want to Pay & Finalize all unflagged items? This will record expenses.")) {
-            startTransition(async () => await bulkApprove());
+            startTransition(async () => {
+                const token = await user.getIdToken();
+                await bulkApprove(token);
+            });
         }
     };
 

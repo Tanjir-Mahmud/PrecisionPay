@@ -210,7 +210,9 @@ export async function flagPayroll(id: string) {
     revalidatePath("/");
 }
 
-export async function bulkApprove(userId: string) {
+export async function bulkApprove(idToken: string) {
+    const userId = await verifyAuth(idToken);
+
     if (!userId) throw new Error("Unauthorized");
     const currentMonth = format(new Date(), "yyyy-MM");
 
