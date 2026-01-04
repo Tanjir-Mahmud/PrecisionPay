@@ -61,7 +61,8 @@ export default function DangerZone() {
             }
 
             // 4. Wipe Local SQL Data (Prisma)
-            await resetPrismaData();
+            const token = await user.getIdToken();
+            await resetPrismaData(token);
 
             alert(`Successfully deleted ${count} remote records and all local SQL data.`);
             window.location.reload();

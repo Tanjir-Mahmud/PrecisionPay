@@ -1,20 +1,23 @@
 "use server";
 
-import { PrismaClient } from "@prisma/client";
+import { verifyAuth } from "@/lib/firebase-admin";
+import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/firebase"; // Firestore
 import { collection, doc, setDoc, writeBatch } from "firebase/firestore";
 
-const prisma = new PrismaClient();
+export async function performStressTest(idToken: string) {
+    const adminId = await verifyAuth(idToken);
+    if (!adminId) throw new Error("Unauthorized");
 
-export async function performStressTest(adminId: string) {
     console.log(`[StressTest] Starting 20-Employee Injection for Admin: ${adminId}...`);
 
     try {
-        // 1. Wipe Data (Prisma)
-        await prisma.attendance.deleteMany({});
-        await prisma.payrollRun.deleteMany({});
-        await prisma.employee.deleteMany({});
+        // 1. Wipe Data (Prisma) - SCOPED TO USER
+        // Delete payrolls and attendance linked to user's employees first
+        await prisma.attendance.deleteMany({ where: { employee: { userId: adminId } } });
+        await prisma.payrollRun.deleteMany({ where: { employee: { userId: adminId } } });
+        await prisma.employee.deleteMany({ where: { userId: adminId } });
 
         // 1b. Wipe Data (Firestore) - Handled by Client usually, but we should try to batch delete here if possible?
         // We assume Client handled it or we just overwrite.
@@ -34,6 +37,7 @@ export async function performStressTest(adminId: string) {
             // Prisma Write
             const emp = await prisma.employee.create({
                 data: {
+                    userId: adminId, // [NEW] Scope
                     firstName,
                     lastName,
                     email,

@@ -72,14 +72,29 @@ export async function updateSettings(idToken: string, formData: FormData) {
     }
 }
 
-export async function resetPrismaData() {
+export async function resetPrismaData(idToken: string) {
+    const userId = await verifyAuth(idToken);
+    if (!userId) throw new Error("Unauthorized");
+
     try {
-        // Delete in order of dependency
-        await prisma.attendance.deleteMany({});
-        await prisma.payrollRun.deleteMany({});
-        await prisma.employee.deleteMany({});
+        // Delete in order of dependency - SCOPED
+        // Attendance & Payroll are linked to Employee, so usually filtered via Employee, but deleteMany needs explicit logic or cascade.
+        // Prisma Schema doesn't strictly enforce cascade here unless defined.
+        // Safer to delete child records by finding employees first?
+        // Or deleteMany where employee.userId == userId.
+
+        await prisma.attendance.deleteMany({
+            where: { employee: { userId } }
+        });
+        await prisma.payrollRun.deleteMany({
+            where: { employee: { userId } }
+        });
+        await prisma.employee.deleteMany({
+            where: { userId }
+        });
+
         // Optional: Reset Company Settings to default? Keeping it for now as user likely wants to keep config.
-        console.log("Prisma Data Wiped Successfully");
+        console.log("Prisma Data Wiped Successfully for User:", userId);
     } catch (e) {
         console.error("Prisma Wipe Failed:", e);
         throw new Error("Failed to wipe local database.");
