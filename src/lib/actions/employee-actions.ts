@@ -45,7 +45,6 @@ export async function deleteEmployee(id: string) {
         // In a real system, we might check for dependencies or soft delete
         // For this demo, we'll try to delete, but if validation fails (FK), we might need to handle it.
         // Prisma Cascade delete might be needed if relations exist, or just soft delete.
-
         // For now, let's toggle isActive instead of hard delete to preserve history
         const emp = await prisma.employee.findUnique({ where: { id } });
 
@@ -59,5 +58,24 @@ export async function deleteEmployee(id: string) {
         revalidatePath("/employees");
     } catch (e) {
         console.error("Failed to delete/toggle employee:", e);
+    }
+}
+
+export async function getEmployees(idToken: string) {
+    const userId = await verifyAuth(idToken);
+    if (!userId) return { error: "Unauthorized" };
+
+    try {
+        const employees = await prisma.employee.findMany({
+            where: {
+                userId,
+                isActive: true
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+        return { data: employees };
+    } catch (e) {
+        console.error("Failed to fetch employees:", e);
+        return { error: "Failed to fetch data" };
     }
 }

@@ -1,20 +1,43 @@
-import { prisma } from "@/lib/prisma";
+"use client";
+
 import EmployeeList from "@/components/employees/EmployeeList";
-import { Employee } from "@prisma/client";
+import { useAuth } from "@/context/AuthContext";
+import { useEffect, useState } from "react";
+import { getEmployees } from "@/lib/actions/employee-actions";
+import { Loader2 } from "lucide-react";
 
-export const dynamic = 'force-dynamic';
+export default function EmployeesPage() {
+    const { user, loading: authLoading } = useAuth();
+    const [employees, setEmployees] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
 
-export default async function EmployeesPage() {
-    let employees: Employee[] = [];
-    try {
-        employees = await prisma.employee.findMany({
-            where: { isActive: true },
-            orderBy: { createdAt: 'desc' }
-        });
-    } catch (e) {
-        console.error("Failed to fetch employees (likely DB connection issue):", e);
-        // Fallback or empty list
-        employees = [];
+    useEffect(() => {
+        if (!user) {
+            if (!authLoading) setLoading(false);
+            return;
+        }
+
+        const loadData = async () => {
+            try {
+                const token = await user.getIdToken();
+                const { data, error } = await getEmployees(token);
+                if (data) setEmployees(data);
+                if (error) console.error(error);
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadData();
+    }, [user, authLoading]);
+
+    if (authLoading || (loading && user)) {
+        return <div className="flex h-96 items-center justify-center text-slate-400"><Loader2 className="animate-spin w-8 h-8" /></div>;
+    }
+
+    if (!user) {
+        return <div className="text-center p-10 text-slate-400">Please log in to manage employees.</div>;
     }
 
     return <EmployeeList initialData={employees} />;
