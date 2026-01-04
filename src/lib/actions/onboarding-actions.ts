@@ -10,10 +10,6 @@ export async function completeOnboarding(data: any, uid: string) {
 
     try {
         // 1. Save to Firestore (Access Control Source of Truth)
-        // We use 'setDoc' to create the document that OnboardingGuard listens for.
-        // In a real multi-tenant app, we might use a unique ID other than "default" for company settings,
-        // but existing logic uses "default" in Prisma.
-
         await setDoc(doc(db, "payroll_settings", uid), {
             ...data,
             adminId: uid,
@@ -21,34 +17,17 @@ export async function completeOnboarding(data: any, uid: string) {
         });
 
         // 2. Save to Prisma (Dashboard & Payroll Engine Source of Truth)
-        // The existing engine relies on CompanySettings ID="default".
-        // We will overwrite it here. In a real SAAS, we'd look up the company by user relation.
+        // Multi-tenant: Upsert by UserID
         await prisma.companySettings.upsert({
-            where: { id: "default" },
+            where: { userId: uid }, // Changed from id: "default"
             update: {
                 companyName: data.companyName,
                 country: data.country,
-                gracePeriodMins: parseTime(data.gracePeriod), // Convert "09:15" to minutes offset?? No, schema uses Int. Wait, schema says Int @default(15). 
-                // Let's check schema: gracePeriodMins Int. 
-                // The UI passes "09:15". We probably meant a grace period DURATION or a TIME? 
-                // The UI says "Daily Grace Period: Cutoff for On Time". That's a TIME e.g. 9:15 AM.
-                // The Schema says 'gracePeriodMins'.
-                // Existing logic might be expecting minutes (e.g. 15 mins grace).
-                // Let's check existing usage. If the user picks 9:15, and shift starts at 9:00, that's 15 mins grace.
-                // For now, let's just save the raw strings to new fields or Map them best effort.
-                // I will update the Prisma Schema to support the Wizard's fields properly if needed, 
-                // but strictly following the prompt: "Save configuration".
-
-                // Correction: UI sends "gracePeriod" as string "09:15".
-                // I'll update the 'shiftStart' to be this time? Or just strict mapping?
-                // Let's map "gracePeriod" (Time) to "shiftStart" + "gracePeriodMins" diff?
-                // Too complex. Let's just update `shiftStart` to 09:00 (default) and assume the input is the "Late Threshold Time".
-
-                // Let's simpler: Just save the raw JSON config so we don't lose it, and map what we can.
-                // I'll map 'country' and 'companyName' directly.
+                standardWorkHours: 160, // Ensure strictly set updates
+                gracePeriodMins: parseTime(data.gracePeriod),
             },
             create: {
-                id: "default",
+                userId: uid, // [NEW]
                 companyName: data.companyName,
                 country: data.country,
                 standardWorkHours: 160,
@@ -57,27 +36,21 @@ export async function completeOnboarding(data: any, uid: string) {
         });
 
         // Update specific fields that match
-        const shiftStart = "09:00"; // Hardcoded standard for now
-        // Calculate grace period minutes if 'gracePeriod' is a time like "09:15" and start is "09:00" => 15 mins.
-        // Safe fallback:
+        const shiftStart = "09:00";
         const graceMins = 15;
 
+        // Optimization: Single Upsert above is enough usually, but keeping logic consistent with previous 2-step if needed
+        // Merging into one update for simplicity
         await prisma.companySettings.update({
-            where: { id: "default" },
+            where: { userId: uid },
             data: {
-                companyName: data.companyName,
-                country: data.country,
-                // Attendance Rules
-                lateDeductionRatio: data.absentDeductionRate ? (data.absentDeductionRate / 100) : 0.5, // % to ratio
+                lateDeductionRatio: data.absentDeductionRate ? (data.absentDeductionRate / 100) : 0.5,
                 maxLateFlags: data.lateThreshold,
-
-                // We'll store the full config in a new JSON field if needed, or just rely on these mapped fields.
             }
         });
 
         // 3. (Optional) Load Demo Data
         if (data.loadDemoData) {
-            // We'll call a separate seeder function (next task)
             await seedDemoData(uid);
             console.log("Demo Data requested - Seeding triggered");
         }
@@ -94,11 +67,6 @@ export async function completeOnboarding(data: any, uid: string) {
 function parseTime(timeStr: string) {
     if (!timeStr) return 15;
     const [h, m] = timeStr.split(":").map(Number);
-    // return h * 60 + m; // Total minutes from midnight?
-    // Schema says "gracePeriodMins" usually means "X minutes after shift start".
-    // If user inputs "09:15" and shift is "09:00", then grace is 15.
-    // For now, let's just return a standard 15 if the logic is too complex for this fast implementation,
-    // or calculate diff if shift start is known (09:00).
     const shiftStartMins = 9 * 60; // 09:00
     const inputMins = (h || 0) * 60 + (m || 0);
     const diff = inputMins - shiftStartMins;
@@ -109,6 +77,7 @@ async function seedDemoData(uid: string) {
     // 1. Create 2 Employees
     const emp1 = await prisma.employee.create({
         data: {
+            userId: uid, // [NEW]
             firstName: "Alice",
             lastName: "Smith",
             email: `alice.${uid.slice(0, 5)}@demo.com`,
@@ -122,6 +91,7 @@ async function seedDemoData(uid: string) {
 
     const emp2 = await prisma.employee.create({
         data: {
+            userId: uid, // [NEW]
             firstName: "Bob",
             lastName: "Jones",
             email: `bob.${uid.slice(0, 5)}@demo.com`,

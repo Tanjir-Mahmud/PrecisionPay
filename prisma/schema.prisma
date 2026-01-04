@@ -26,7 +26,8 @@ model User {
 
 // Global Company Configuration
 model CompanySettings {
-  id                String  @id @default("default") // Singleton row usually
+  id                String  @id @default(uuid())
+  userId            String  @unique // Link to Owner (One company per user for now)
   companyName       String  @default("My Company")
   
   // Rules
@@ -53,9 +54,10 @@ model CompanySettings {
 // Employees
 model Employee {
   id              String   @id @default(uuid())
+  userId          String   // Owner ID
   firstName       String
   lastName        String
-  email           String   @unique
+  email           String   // Removed @unique, moved to compound unique below
   phone           String?
   joiningDate     DateTime
   designation     String
@@ -75,6 +77,8 @@ model Employee {
   attendance      Attendance[]
   payrollRuns     PayrollRun[]
   leaveRequests   LeaveRequest[]
+
+  @@unique([email, userId]) // Scoped to User
 }
 
 // Attendance Records

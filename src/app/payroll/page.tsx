@@ -1,16 +1,36 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useAuth } from "@/context/AuthContext";
 import {
     Calculator,
     History,
     CheckCircle2 // Audit Icon
 } from "lucide-react";
 import PayrollTable from "@/components/payroll/PayrollTable";
-import { getPendingPayrolls } from "@/lib/actions/payroll-actions";
+import { getPendingPayrolls, PayrollWithVariance } from "@/lib/actions/payroll-actions";
 import RunPayrollButton from "@/components/payroll/RunPayrollButton";
 
-export const dynamic = "force-dynamic";
+export default function PayrollPage() {
+    const { user, loading } = useAuth();
+    const [pendingData, setPendingData] = useState<PayrollWithVariance[]>([]);
+    const [isFetching, setIsFetching] = useState(true);
 
-export default async function PayrollPage() {
-    const pendingData = await getPendingPayrolls();
+    useEffect(() => {
+        if (!user) {
+            if (!loading) setIsFetching(false);
+            return;
+        }
+
+        getPendingPayrolls(user.uid).then((data) => {
+            setPendingData(data);
+            setIsFetching(false);
+        });
+    }, [user, loading]);
+
+    if (loading || isFetching) {
+        return <div className="p-8 text-center text-slate-400">Loading payroll data...</div>;
+    }
 
     return (
         <div className="space-y-8">

@@ -3,8 +3,10 @@
 import { useState, useTransition } from "react";
 import { UploadCloud, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { importData } from "@/lib/actions/import-actions";
+import { useAuth } from "@/context/AuthContext";
 
 export default function DataImportCard() {
+    const { user } = useAuth();
     const [file, setFile] = useState<File | null>(null);
     const [isPending, startTransition] = useTransition();
     const [status, setStatus] = useState<{ type: 'success' | 'error' | null, message: string }>({ type: null, message: '' });
@@ -18,12 +20,16 @@ export default function DataImportCard() {
 
     const handleUpload = () => {
         if (!file) return;
+        if (!user) {
+            setStatus({ type: 'error', message: "You must be logged in to import data." });
+            return;
+        }
 
         const formData = new FormData();
         formData.append("file", file);
 
         startTransition(async () => {
-            const result = await importData(formData);
+            const result = await importData(user.uid, formData);
             if (result.success) {
                 setStatus({ type: 'success', message: result.message });
                 setFile(null);

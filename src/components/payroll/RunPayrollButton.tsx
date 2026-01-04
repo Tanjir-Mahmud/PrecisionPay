@@ -3,13 +3,16 @@
 import { useTransition } from "react";
 import { Calculator } from "lucide-react";
 import { runNewCalculation } from "@/lib/actions/payroll-actions";
+import { useAuth } from "@/context/AuthContext";
 
 export default function RunPayrollButton() {
+    const { user } = useAuth();
     const [isPending, startTransition] = useTransition();
 
     const handleClick = () => {
+        if (!user) return;
         startTransition(async () => {
-            await runNewCalculation();
+            await runNewCalculation(user.uid);
         });
     };
 

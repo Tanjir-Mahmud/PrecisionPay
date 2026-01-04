@@ -5,8 +5,10 @@ import { revalidatePath } from "next/cache";
 import * as XLSX from "xlsx";
 import { format, parse, isValid } from "date-fns";
 
-export async function importData(formData: FormData) {
+export async function importData(userId: string, formData: FormData) {
     try {
+        if (!userId) throw new Error("Unauthorized: No User ID provided");
+
         const file = formData.get("file") as File;
         if (!file) throw new Error("No file uploaded");
 
@@ -18,11 +20,15 @@ export async function importData(formData: FormData) {
         const jsonData = XLSX.utils.sheet_to_json(sheet) as any[];
         if (jsonData.length === 0) throw new Error("Sheet is empty");
 
-        // Fetch Settings from Prisma to apply Rules
-        const settings = await prisma.companySettings.findFirst() || {
+        // Fetch Settings for THIS User
+        const settings = await prisma.companySettings.findUnique({
+            where: { userId }
+        }) || {
             maxLateFlags: 3,
-            latePenaltyAmount: 50, // Default fallback
-            overtimeMultiplier: 1.5
+            latePenaltyAmount: 50,
+            overtimeMultiplier: 1.5,
+            userId, // Fallback need
+            companyName: "Default"
         };
 
         const currentMonth = format(new Date(), "yyyy-MM");
@@ -56,10 +62,14 @@ export async function importData(formData: FormData) {
 
                 if (!email || basic === 0) continue;
 
+                // SCOPED UPSERT
                 const employee = await tx.employee.upsert({
-                    where: { email },
+                    where: {
+                        email_userId: { email, userId }
+                    },
                     update: { baseSalary: basic, designation: desig, department: dept, firstName, lastName },
                     create: {
+                        userId, // Link to User
                         firstName, lastName, email, department: dept, designation: desig, baseSalary: basic, joiningDate,
                         paymentMethod: "BANK_TRANSFER"
                     }
@@ -70,12 +80,11 @@ export async function importData(formData: FormData) {
                 // A) Late Penalty Logic
                 let leaveDeduction = 0;
                 if (lateDays > settings.maxLateFlags) {
-                    // Use User-Defined Penalty Amount from Settings
                     leaveDeduction = settings.latePenaltyAmount || 50;
                 }
 
                 // B) Overtime Calculation
-                const hourlyRate = (basic / 160); // Standard 160h work month
+                const hourlyRate = (basic / 160);
                 const overtimePay = otHours * hourlyRate * (settings.overtimeMultiplier || 1.5);
 
                 // C) Tax & Net Pay (Simplified for Draft)
@@ -149,7 +158,7 @@ export async function importData(formData: FormData) {
         revalidatePath("/payroll");
         revalidatePath("/reports");
 
-        return { success: true, message: `Imported ${jsonData.length} records. Applied Settings: Late Fee $${settings.latePenaltyAmount || 50}, OT x${settings.overtimeMultiplier}.` };
+        return { success: true, message: `Imported ${jsonData.length} records.` };
 
     } catch (e: any) {
         console.error("Import Error:", e);

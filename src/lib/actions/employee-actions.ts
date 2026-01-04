@@ -3,7 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 
-export async function addEmployee(formData: FormData) {
+export async function addEmployee(userId: string, formData: FormData) {
+    if (!userId) {
+        console.error("Unauthorized addEmployee attempt");
+        return;
+    }
     try {
         const firstName = formData.get("firstName") as string;
         const lastName = formData.get("lastName") as string;
@@ -15,6 +19,7 @@ export async function addEmployee(formData: FormData) {
 
         await prisma.employee.create({
             data: {
+                userId, // [NEW] Link to User
                 firstName,
                 lastName,
                 email,
@@ -29,10 +34,6 @@ export async function addEmployee(formData: FormData) {
         revalidatePath("/employees");
     } catch (e) {
         console.error("Failed to add employee:", e);
-        // Throwing error allows the client-side useTransition to catch it if wired, 
-        // OR we can return a result object if refactored. 
-        // For now, logging prevents crash loop, but UI needs to know.
-        // Let's assume the UI handles server errors or we just protect the runtime from panic.
     }
 }
 

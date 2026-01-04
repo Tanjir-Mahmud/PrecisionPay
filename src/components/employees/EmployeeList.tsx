@@ -118,7 +118,7 @@ export default function EmployeeList({ initialData }: { initialData: Employee[] 
             });
 
             // 2. Dual-write to Postgres
-            await addEmployee(formData);
+            await addEmployee(user.uid, formData);
 
             setIsAddOpen(false);
             // Optional: location.reload(); if needed, but State update usually preferred or letting RevalidatePath handle it.
