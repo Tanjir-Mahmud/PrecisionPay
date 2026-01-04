@@ -4,21 +4,29 @@ import { useState, useEffect } from "react";
 import { Info, Loader2 } from "lucide-react";
 import { TaxReport } from "@/lib/tax-engine";
 import { calculateTaxDetails } from "@/lib/actions/tax-actions";
+import { useAuth } from "@/context/AuthContext";
 
 export default function TaxWaterfall({ taxableIncome }: { taxableIncome: number }) {
+    const { user } = useAuth();
     const [report, setReport] = useState<TaxReport | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        if (!user) return;
         let mounted = true;
-        calculateTaxDetails(taxableIncome).then(data => {
-            if (mounted) {
-                setReport(data);
-                setLoading(false);
-            }
+        setLoading(true);
+
+        user.getIdToken().then(token => {
+            calculateTaxDetails(token, taxableIncome).then(data => {
+                if (mounted) {
+                    setReport(data);
+                    setLoading(false);
+                }
+            });
         });
+
         return () => { mounted = false; };
-    }, [taxableIncome]);
+    }, [taxableIncome, user]);
 
     if (loading) return <div className="flex items-center text-slate-400 text-sm"><Loader2 className="w-3 h-3 animate-spin mr-2" /> Calculating Tax...</div>;
     if (!report) return null;

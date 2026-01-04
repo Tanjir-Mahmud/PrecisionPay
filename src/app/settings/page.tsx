@@ -1,9 +1,11 @@
+"use client";
+
 import {
-    Settings,
     Building2,
     Clock,
     Banknote,
-    Save
+    Save,
+    Loader2
 } from "lucide-react";
 import { getSettings, updateSettings } from "@/lib/actions/settings-actions";
 import CountrySwitcher from "@/components/settings/CountrySwitcher";
@@ -11,11 +13,51 @@ import PenaltyConfig from "@/components/settings/PenaltyConfig";
 import BonusConfig from "@/components/settings/BonusConfig";
 import DangerZone from "@/components/settings/DangerZone";
 import DataImportCard from "@/components/settings/DataImportCard";
+import { useAuth } from "@/context/AuthContext";
+import { useEffect, useState, useTransition } from "react";
 
-export const dynamic = "force-dynamic";
+export default function SettingsPage() {
+    const { user, loading: authLoading } = useAuth();
+    const [settings, setSettings] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+    const [isSaving, startTransition] = useTransition();
 
-export default async function SettingsPage() {
-    const settings = await getSettings();
+    useEffect(() => {
+        if (!user) return;
+        const fetchSettings = async () => {
+            try {
+                const token = await user.getIdToken();
+                const data = await getSettings(token);
+                setSettings(data);
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchSettings();
+    }, [user]);
+
+    const handleSubmit = (formData: FormData) => {
+        if (!user) return;
+        startTransition(async () => {
+            try {
+                const token = await user.getIdToken();
+                await updateSettings(token, formData);
+                alert("Settings Saved!");
+            } catch (e: any) {
+                alert("Error: " + e.message);
+            }
+        });
+    };
+
+    if (authLoading || loading) {
+        return <div className="flex h-96 items-center justify-center text-slate-400"><Loader2 className="animate-spin w-8 h-8" /></div>;
+    }
+
+    if (!settings) {
+        return <div className="text-center p-10 text-slate-400">Failed to load settings or you are not logged in.</div>;
+    }
 
     return (
         <div className="space-y-8">
@@ -26,7 +68,7 @@ export default async function SettingsPage() {
                 </div>
             </div>
 
-            <form action={updateSettings} className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <form action={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* 1. Data Import (New) */}
                 <div className="md:col-span-2">
                     <DataImportCard />
@@ -93,9 +135,9 @@ export default async function SettingsPage() {
                 </div>
 
                 <div className="md:col-span-2 flex justify-end">
-                    <button type="submit" className="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-all transform active:scale-95">
-                        <Save className="w-4 h-4 mr-2" />
-                        Save Configuration
+                    <button type="submit" disabled={isSaving} className="flex items-center bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-all transform active:scale-95 disabled:opacity-50">
+                        {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                        {isSaving ? "Saving..." : "Save Configuration"}
                     </button>
                 </div>
             </form>

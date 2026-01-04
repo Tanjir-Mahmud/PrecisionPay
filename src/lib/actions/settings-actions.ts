@@ -3,67 +3,38 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 
-export async function getSettings() {
-    try {
-        // Fallback: Try RAW query first to get 'country' if Client is outdated
-        try {
-            const rows: any = await prisma.$queryRaw`SELECT * FROM CompanySettings WHERE id = 'default'`;
+import { verifyAuth } from "@/lib/firebase-admin";
 
-            if (rows && rows.length > 0) {
-                return {
-                    ...rows[0],
-                    // Ensure defaults if null (though DB defaults handle this)
-                    country: rows[0].country || "USA",
-                    standardWorkHours: rows[0].standardWorkHours || 160,
-                    overtimeMultiplier: rows[0].overtimeMultiplier || 1.5
-                };
-            }
-        } catch (e) {
-            console.warn("Raw query failed, falling back to standard client (Country may be missing)", e);
-        }
+export async function getSettings(idToken: string) {
+    try {
+        const userId = await verifyAuth(idToken);
+        if (!userId) return null;
 
         return await prisma.companySettings.upsert({
-            where: { id: "default" },
+            where: { userId },
             update: {},
             create: {
-                id: "default",
+                userId,
+                id: crypto.randomUUID(), // Ensure UUID
                 companyName: "PrecisionPay Inc.",
                 standardWorkHours: 160,
                 overtimeMultiplier: 1.5,
                 shiftStart: "09:00",
                 shiftEnd: "17:00",
-                gracePeriodMins: 15
+                gracePeriodMins: 15,
+                country: "USA"
             }
         });
     } catch (e) {
-        console.error("Failed to fetch/upsert settings (DB Error):", e);
-        // Fallback Mock Settings
-        return {
-            id: "mock-default",
-            companyName: "PrecisionPay Inc. (Offline Mode)",
-            standardWorkHours: 160,
-            overtimeMultiplier: 1.5,
-            shiftStart: "09:00",
-            shiftEnd: "17:00",
-            gracePeriodMins: 15,
-            country: "USA",
-            bonusThreshold: 90,
-            bonusRate: 5.0,
-            lateDeductionRatio: 0.5,
-            maxLateFlags: 3,
-            taxBracketJson: "[]"
-        };
+        console.error("Failed to fetch settings:", e);
+        return null; // Handle UI accordingly
     }
 }
 
-// Helper to force schema sync if CLI is locked
-async function ensureSchema() {
-    try { await prisma.$executeRawUnsafe(`ALTER TABLE CompanySettings ADD COLUMN country TEXT DEFAULT 'USA'`); } catch (e) { }
-    try { await prisma.$executeRawUnsafe(`ALTER TABLE CompanySettings ADD COLUMN gracePeriodMins INTEGER DEFAULT 15`); } catch (e) { }
-    try { await prisma.$executeRawUnsafe(`ALTER TABLE CompanySettings ADD COLUMN overtimeMultiplier REAL DEFAULT 1.5`); } catch (e) { }
-}
+export async function updateSettings(idToken: string, formData: FormData) {
+    const userId = await verifyAuth(idToken);
+    if (!userId) throw new Error("Unauthorized");
 
-export async function updateSettings(formData: FormData) {
     const companyName = formData.get("companyName") as string;
     const shiftStart = formData.get("shiftStart") as string;
     const shiftEnd = formData.get("shiftEnd") as string;
@@ -71,14 +42,9 @@ export async function updateSettings(formData: FormData) {
     const gracePeriodMins = parseInt(formData.get("gracePeriodMins") as string) || 15;
     const country = (formData.get("country") as string) || "USA";
 
-    // Ensure columns exist (Hotfix for locked DB)
-    await ensureSchema();
-
-    // Standard Prisma Update (Schema confirmed to have 'country')
     try {
-        console.log(`[Settings] Updating country to: ${country}`);
         await prisma.companySettings.upsert({
-            where: { id: "default" },
+            where: { userId },
             update: {
                 companyName,
                 shiftStart,
@@ -88,7 +54,7 @@ export async function updateSettings(formData: FormData) {
                 country
             },
             create: {
-                id: "default",
+                userId,
                 companyName,
                 shiftStart,
                 shiftEnd,
@@ -97,14 +63,13 @@ export async function updateSettings(formData: FormData) {
                 country
             }
         });
-        console.log("[Settings] Update successful");
+        revalidatePath("/settings");
+        revalidatePath("/attendance");
+        revalidatePath("/");
     } catch (e) {
         console.error("Settings Update Failed:", e);
         throw new Error("Failed to save settings.");
     }
-    revalidatePath("/settings");
-    revalidatePath("/attendance");
-    revalidatePath("/"); // Dashboard
 }
 
 export async function resetPrismaData() {
