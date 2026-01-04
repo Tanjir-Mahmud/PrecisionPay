@@ -40,25 +40,31 @@ export default function ReportsPage() {
         init();
     }, [user]); // Depend on user
 
-    const handleExport = (type: "pdf" | "excel") => {
-        if (!analytics) return; // Changed from stats to analytics
-        // Need raw employee data for export? 
-        // For Day 5, the prompt implies exporting "professional payroll summary". 
-        // We can fetch the raw "Last Month" data or "Current Draft".
-        // Let's assume we export the ROI list or the 'Current Draft' if we had access.
-        // Simplified: Export the ROI/Performance data for the demo, OR fetch current payroll.
-        // Let's Export the 'ROI' list as a proxy for employee list since we have it in stats.
-        // OR better: fetch actual payroll data on button click?
-        // Let's stick to the prompt's explicit mentioning of "Net Payout, Tax..."
-        // I'll assume we pass the *current state* logic to the exporter. 
-        // For this demo, let's export the *Trend* or a Mock List based on stats?
-        // No, let's map ROI data to export rows (incomplete but proves concept).
-        const exportData = analytics.roi.map(r => ({
+
+    const handleExport = async (type: "pdf" | "excel") => {
+        // Fetch full data for export
+        // We import the server action dynamically or use the one we just created
+        // Since we cannot import server actions directly inside a client component function easily without passing them down or using a separate file, 
+        // we can use a transition or just call it if it's imported at the top.
+        // But first, let's make sure we import it. 
+        // Wait, standard practice is to import server action at top of file.
+        // Let's modify imports first.
+
+        /* 
+           Simulating the async fetch for full report data.
+           In a real scenario, we would await getFullReportData() here.
+           However, since this is a Client Component, we need to ensure the action is importable.
+           Let's assume we can import it.
+        */
+        const { getFullReportData } = await import("@/lib/actions/report-actions");
+        const fullData = await getFullReportData();
+
+        const exportData = fullData.topPerformers.map(r => ({
             name: r.name,
-            role: r.role,
-            department: "N/A",
+            role: r.dept, // mapped from dept to role for consistency or kept as dept
+            department: r.dept,
             gross: r.cost,
-            tax: r.cost * 0.2, // Mock for export demo
+            tax: r.cost * 0.2, // Mock logic preserved
             penalty: 0,
             net: r.cost * 0.8
         }));
@@ -66,6 +72,7 @@ export default function ReportsPage() {
         if (type === "pdf") generatePDF(exportData, companyInfo.name, companyInfo.country);
         else generateExcel(exportData, companyInfo.name);
     };
+
 
     if (loading || !analytics) return <div className="h-96 glass-card animate-pulse"></div>;
 

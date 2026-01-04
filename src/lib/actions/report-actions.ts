@@ -99,3 +99,80 @@ export async function getReportData(): Promise<ReportData> {
         };
     }
 }
+
+export async function getFullReportData(): Promise<ReportData> {
+    try {
+        const currentMonth = format(new Date(), "yyyy-MM");
+        const lastMonth = format(subMonths(new Date(), 1), "yyyy-MM");
+
+        // 1. Tax Liability (Yearly Trend) - Same as dashboard
+        const runs = await prisma.payrollRun.groupBy({
+            by: ['monthYear'],
+            _sum: { tax: true },
+            where: {
+                monthYear: { startsWith: format(new Date(), "yyyy") }
+            },
+            orderBy: { monthYear: 'asc' }
+        });
+
+        const taxLiability = runs.map(r => ({
+            month: r.monthYear,
+            amount: r._sum.tax || 0
+        }));
+
+        // 2. Variance Analysis - Same as dashboard
+        const currentStats = await prisma.payrollRun.aggregate({
+            where: { monthYear: currentMonth },
+            _sum: { netPay: true, overtimePay: true, tax: true }
+        });
+
+        const lastStats = await prisma.payrollRun.aggregate({
+            where: { monthYear: lastMonth },
+            _sum: { netPay: true, overtimePay: true, tax: true }
+        });
+
+        const calcVariance = (curr: number, prev: number, label: string) => {
+            if (prev === 0 && curr === 0) return { category: label, current: 0, previous: 0, diffPct: 0, status: "OK" as const };
+            const diff = prev > 0 ? ((curr - prev) / prev) * 100 : 100;
+            let status: "OK" | "Warning" | "Critical" = "OK";
+            if (Math.abs(diff) > 10) status = "Warning";
+            if (Math.abs(diff) > 20) status = "Critical";
+            return {
+                category: label,
+                current: curr, // exports usually want full precision, or handle in client
+                previous: prev,
+                diffPct: parseFloat(diff.toFixed(1)),
+                status
+            };
+        };
+
+        const variance = [
+            calcVariance(currentStats._sum.netPay || 0, lastStats._sum.netPay || 0, "Total Net Payout"),
+            calcVariance(currentStats._sum.overtimePay || 0, lastStats._sum.overtimePay || 0, "Overtime Costs"),
+            calcVariance(currentStats._sum.tax || 0, lastStats._sum.tax || 0, "Tax Liabilities"),
+        ];
+
+        // 3. FULL LIST of Employees for Export
+        const allEmployees = await prisma.employee.findMany({
+            orderBy: { baseSalary: 'desc' },
+            // NO 'take: 5' limit here
+            select: { firstName: true, lastName: true, department: true, baseSalary: true }
+        });
+
+        const topPerformers = allEmployees.map(e => ({
+            name: `${e.firstName} ${e.lastName}`,
+            dept: e.department,
+            cost: e.baseSalary,
+            score: Math.floor(Math.random() * (100 - 85) + 85) // Mock score still needed if not in DB
+        }));
+
+        return { taxLiability, variance, topPerformers };
+    } catch (e) {
+        console.error("Full Report Export Failed:", e);
+        return {
+            taxLiability: [],
+            variance: [],
+            topPerformers: []
+        };
+    }
+}
