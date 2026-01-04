@@ -12,7 +12,7 @@ export default function SidebarWrapper({ children }: { children: React.ReactNode
     const router = useRouter();
     const { user, loading } = useAuth();
 
-    const isAuthPage = pathname === "/login" || pathname === "/signup";
+    const isAuthPage = pathname === "/login" || pathname === "/signup" || pathname === "/debug";
     const isOnboardingPage = pathname === "/onboarding";
 
     // Route Protection
