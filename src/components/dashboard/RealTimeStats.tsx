@@ -1,12 +1,9 @@
-import { getDashboardStats } from "@/lib/dashboard-service";
 import { StatsCard } from "./Widgets";
 import { Banknote, Scale, FileText } from "lucide-react";
 
-export default async function RealTimeStats() {
-    // Fetch data from Server Action / Service
-    const stats = await getDashboardStats();
+export default function RealTimeStats({ stats }: { stats: any }) {
+    if (!stats) return <div className="h-40 animate-pulse bg-slate-800/50 rounded-lg"></div>;
 
-    // Format currency helper
     // Format currency helper
     const getIsoCurrency = (symbol: string) => {
         if (symbol === "£") return "GBP";

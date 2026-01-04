@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { verifyAuth } from "@/lib/firebase-admin";
 import { startOfYear, subMonths, format, startOfMonth, endOfMonth } from "date-fns";
 
 export interface DashboardAnalytics {
@@ -32,9 +33,17 @@ export interface DashboardAnalytics {
 /**
  * Calculates Month-over-Month Variance for Payroll
  */
-export async function getPayrollAnalytics(adminId: string): Promise<DashboardAnalytics> {
-    // Note: adminId param kept for signature compatibility, but strict scoping might be redundant if single tenant 
-    // or handled by RLS. For now, we query purely based on DB state.
+export async function getPayrollAnalytics(idToken: string): Promise<DashboardAnalytics> {
+    const userId = await verifyAuth(idToken);
+    if (!userId) {
+        // Return clear empty state if unauthorized
+        return {
+            variance: { percentChange: 0, status: "STABLE", currentTotal: 0, previousTotal: 0, overtimeCost: 0 },
+            roi: [],
+            ytdTax: { totalLiabilities: 0, country: "USA" },
+            trend: []
+        };
+    }
 
     // 1. Setup Dates
     const today = new Date();
@@ -42,12 +51,11 @@ export async function getPayrollAnalytics(adminId: string): Promise<DashboardAna
     const prevMonthStr = format(subMonths(today, 1), "yyyy-MM");
     const currentYear = today.getFullYear();
 
-    // 2. Fetch All Payroll Runs (Paid/Approved)
-    // Optimization: In a real app, verify scope or date range. Fetching all might be heavy eventually.
-    // For now, fetching everything to compute trends and YTD is acceptable.
+    // 2. Fetch All Payroll Runs (Paid/Approved) SCOPED
     const runs = await prisma.payrollRun.findMany({
         where: {
-            status: "PAID" // STRICT reporting on PAID only
+            status: "PAID",
+            employee: { userId } // Scoped to User
         },
         include: { employee: true }
     });
@@ -93,12 +101,15 @@ export async function getPayrollAnalytics(adminId: string): Promise<DashboardAna
 
     // 5. ROI Matrix (Active Employees from Runs)
     // We only have KPI if recorded. Using mock calculation or data from run if available.
-    // Schema has 'performanceScore' on Employee.
     const uniqueEmpIds = Array.from(new Set(runs.map(r => r.employeeId)));
 
-    // Fetch fresh employee data for current KPI
+    // Fetch fresh employee data for current KPI SCOPED
     const employees = await prisma.employee.findMany({
-        where: { id: { in: uniqueEmpIds }, isActive: true }
+        where: {
+            id: { in: uniqueEmpIds },
+            isActive: true,
+            userId // Scoped
+        }
     });
 
     const roi = employees.map(emp => {

@@ -1,13 +1,18 @@
 import { prisma } from "@/lib/prisma";
 import { format } from "date-fns";
 
-export async function getDashboardStats() {
+export async function getDashboardStats(idToken: string) {
     try {
+        const userId = await verifyAuth(idToken);
+        // If auth fails, return null or throw. The client will handle empty state.
+        if (!userId) throw new Error("Unauthorized");
+
         let targetMonth = format(new Date(), "yyyy-MM");
 
         // 0. Compliance Context
-        // Fallback if settings table empty or locked (using raw query approach in settings, but standard here for read)
-        const settings = await prisma.companySettings.findFirst({ where: { id: "default" } });
+        const settings = await prisma.companySettings.findUnique({ where: { userId } });
+
+        // Context defaults if no settings
         const compliance = {
             country: settings?.country || "USA",
             currency: (settings?.country === "UK" ? "£" : settings?.country === "DE" || settings?.country === "ES" ? "€" : settings?.country === "BD" ? "৳" : settings?.country === "IN" ? "₹" : "$"),
@@ -15,15 +20,21 @@ export async function getDashboardStats() {
         };
 
         // 1. Total Payout & Expense Distribution
-        // "Smart Dashboard" - If current month has no data, find the latest month that DOES.
-        // This ensures the charts are never empty if we have history.
+        // "Smart Dashboard" - If current month has no data, find the latest month that DOES for this user.
         const currentMonthCheck = await prisma.payrollRun.findFirst({
-            where: { monthYear: targetMonth, status: "PAID" }
+            where: {
+                monthYear: targetMonth,
+                status: "PAID",
+                employee: { userId } // Scoped
+            }
         });
 
         if (!currentMonthCheck) {
             const latestRun = await prisma.payrollRun.findFirst({
-                where: { status: "PAID" },
+                where: {
+                    status: "PAID",
+                    employee: { userId } // Scoped
+                },
                 orderBy: { monthYear: 'desc' }
             });
             if (latestRun) {
@@ -41,7 +52,8 @@ export async function getDashboardStats() {
             },
             where: {
                 monthYear: targetMonth,
-                status: "PAID"
+                status: "PAID",
+                employee: { userId } // Scoped
             }
         });
 
@@ -52,22 +64,27 @@ export async function getDashboardStats() {
             bonuses: payoutAggregate._sum.bonus || 0
         };
 
-        // 2. Pending Payslips (Always current month, or maybe target month? Let's keep pending as "Current Action Items")
+        // 2. Pending Payslips
         const pendingCount = await prisma.payrollRun.count({
             where: {
-                monthYear: format(new Date(), "yyyy-MM"), // Pending is always about "Now"
-                status: { in: ["DRAFT", "PENDING_REVIEW"] }
+                monthYear: format(new Date(), "yyyy-MM"),
+                status: { in: ["DRAFT", "PENDING_REVIEW"] },
+                employee: { userId } // Scoped
             }
         });
 
         // 3. Comparison (Target Month vs Month Before Target)
-        const lastMonthDate = new Date(targetMonth + "-01"); // Append day to parse
+        const lastMonthDate = new Date(targetMonth + "-01");
         lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
         const lastMonth = format(lastMonthDate, "yyyy-MM");
 
         const lastMonthPayout = await prisma.payrollRun.aggregate({
             _sum: { netPay: true },
-            where: { monthYear: lastMonth, status: { in: ["APPROVED", "PAID"] } }
+            where: {
+                monthYear: lastMonth,
+                status: { in: ["APPROVED", "PAID"] },
+                employee: { userId } // Scoped
+            }
         });
 
         const currentPayout = expenses.netSalaries;
@@ -79,9 +96,12 @@ export async function getDashboardStats() {
             payoutChange = `${change > 0 ? "+" : ""}${change.toFixed(1)}% vs Last Month`;
         }
 
-        // 4. Audit Engine (Run on the displayed data)
+        // 4. Audit Engine
         const runs = await prisma.payrollRun.findMany({
-            where: { monthYear: targetMonth },
+            where: {
+                monthYear: targetMonth,
+                employee: { userId } // Scoped
+            },
             include: { employee: true }
         });
 
@@ -94,26 +114,24 @@ export async function getDashboardStats() {
         const auditFlags: string[] = [];
 
         for (const run of runs) {
-            // A. Tax Miss
             if (run.netPay > 1000 && run.tax === 0) {
                 auditSummary.taxMisses++;
                 auditFlags.push(`Tax Miss: ${run.employee.firstName} (Income > 1k, Tax 0)`);
             }
-
-            // B. Anomaly (simplified: if bonus > 50% of base)
             if (run.bonus > (run.basePay * 0.5)) {
                 auditSummary.salaryAnomalies++;
                 auditFlags.push(`High Bonus: ${run.employee.firstName} (Bonus > 50% Base)`);
             }
         }
 
-        // Real Attendance Alerts (Count unique employees with at least 1 late or absent)
+        // Real Attendance Alerts
         const lateEmployees = await prisma.attendance.groupBy({
             by: ['employeeId'],
             where: {
+                employee: { userId }, // Scoped
                 OR: [
                     { isLate: true },
-                    { status: { in: ["ABSENT", "LATE", "HALF_DAY_DEDUCTION"] } } // Broaden check
+                    { status: { in: ["ABSENT", "LATE", "HALF_DAY_DEDUCTION"] } }
                 ]
             }
         });
@@ -121,7 +139,10 @@ export async function getDashboardStats() {
 
         // 5. Total Employees
         const employeesCount = await prisma.employee.count({
-            where: { isActive: true }
+            where: {
+                userId, // Scoped
+                isActive: true
+            }
         });
 
         return {
@@ -133,22 +154,12 @@ export async function getDashboardStats() {
             compliance,
             expenses,
             auditSummary,
-            auditFlags: auditFlags.slice(0, 5) // Top 5
+            auditFlags: auditFlags.slice(0, 5)
         };
     } catch (error) {
-        console.error("Failed to fetch dashboard stats (likely DB connection issue):", error);
-        // Fallback Mock Data
-        return {
-            totalPayout: 125000,
-            taxLiabilities: 24000,
-            pendingPayslips: 3,
-            employeesCount: 12,
-            payoutChange: "+12.5% vs Last Month",
-            compliance: { country: "USA", currency: "$", taxYear: "FY2025" },
-            expenses: { netSalaries: 85000, taxes: 24000, benefits: 12000, bonuses: 4000 },
-            auditSummary: { taxMisses: 1, salaryAnomalies: 2, attendanceAlerts: 5 },
-            auditFlags: ["System Demo Mode: Database Connection Failed", "Using Mock Data"],
-        };
+        console.error("Failed to fetch dashboard stats:", error);
+        // Return null or error structure, allow client to show error state
+        throw error;
     }
 }
 

@@ -68,11 +68,9 @@ export function PayrollTrendChart() {
 
         const load = async () => {
             try {
-                // Dynamic Import or Static
-                // Since we fixed analytics-engine sync, let's use the static import assumed above or dynamic if we must
-                // Ideally static import getPayrollAnalytics at top level for type safety
+                const token = await user.getIdToken();
                 const { getPayrollAnalytics } = await import("@/lib/analytics-engine");
-                const stats = await getPayrollAnalytics(user.uid);
+                const stats = await getPayrollAnalytics(token);
                 setData(stats.trend.reverse());
             } catch (e) { console.error(e); }
             setLoading(false);
