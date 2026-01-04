@@ -1,3 +1,5 @@
+"use server";
+
 import { prisma } from "@/lib/prisma";
 import { format } from "date-fns";
 import { verifyAuth } from "@/lib/firebase-admin";
