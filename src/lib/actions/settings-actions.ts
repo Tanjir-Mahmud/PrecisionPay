@@ -8,9 +8,12 @@ import { verifyAuth } from "@/lib/firebase-admin";
 export async function getSettings(idToken: string) {
     try {
         const userId = await verifyAuth(idToken);
-        if (!userId) return null;
+        if (!userId) {
+            console.error("getSettings: verifyAuth failed (returned null/undefined)");
+            return { error: "Authentication failed. Invalid token." };
+        }
 
-        return await prisma.companySettings.upsert({
+        const data = await prisma.companySettings.upsert({
             where: { userId },
             update: {},
             create: {
@@ -25,9 +28,10 @@ export async function getSettings(idToken: string) {
                 country: "USA"
             }
         });
-    } catch (e) {
+        return { data };
+    } catch (e: any) {
         console.error("Failed to fetch settings:", e);
-        return null; // Handle UI accordingly
+        return { error: e.message || "Database connection failed." };
     }
 }
 

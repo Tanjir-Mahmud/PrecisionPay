@@ -6,7 +6,7 @@ import { getTaxReport, TaxReport } from "@/lib/tax-engine";
 
 export async function calculateTaxDetails(idToken: string, taxableIncome: number): Promise<TaxReport> {
     // 1. Fetch current active country
-    const settings = await getSettings(idToken);
+    const { data: settings } = await getSettings(idToken);
 
     // Default to USA if unauthorized or missing
     const countryCode = settings?.country || "USA";

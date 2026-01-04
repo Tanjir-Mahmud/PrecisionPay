@@ -23,20 +23,36 @@ export default function SettingsPage() {
     const [isSaving, startTransition] = useTransition();
 
     useEffect(() => {
-        if (!user) return;
+        if (!user) {
+            // If authentication is done loading but no user, stop loading settings
+            if (!authLoading) setLoading(false);
+            return;
+        }
+
         const fetchSettings = async () => {
             try {
                 const token = await user.getIdToken();
-                const data = await getSettings(token);
+                const { data, error } = await getSettings(token);
+
+                if (error) {
+                    console.error("Settings Error:", error);
+                    // If error is 'Unauthorized', user might need relogin, but alert details
+                    if (error.includes("Authentication failed")) {
+                        alert("Session expired. Please sign out and sign in again.");
+                    } else {
+                        alert("Settings Load Error: " + error);
+                    }
+                }
                 setSettings(data);
-            } catch (e) {
-                console.error(e);
+            } catch (e: any) {
+                console.error("Critical Fetch Error:", e);
+                alert("Failed to load: " + e.message);
             } finally {
                 setLoading(false);
             }
         };
         fetchSettings();
-    }, [user]);
+    }, [user, authLoading]);
 
     const handleSubmit = (formData: FormData) => {
         if (!user) return;
@@ -51,12 +67,23 @@ export default function SettingsPage() {
         });
     };
 
-    if (authLoading || loading) {
+    if (authLoading || (loading && user)) {
         return <div className="flex h-96 items-center justify-center text-slate-400"><Loader2 className="animate-spin w-8 h-8" /></div>;
     }
 
+    if (!user) {
+        return <div className="text-center p-10 text-slate-400">Please log in to view settings.</div>;
+    }
+
     if (!settings) {
-        return <div className="text-center p-10 text-slate-400">Failed to load settings or you are not logged in.</div>;
+        return (
+            <div className="text-center p-10 text-slate-400">
+                <p>Failed to load settings data.</p>
+                <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-slate-800 rounded text-blue-400 hover:text-white transition-colors">
+                    Retry Loading
+                </button>
+            </div>
+        );
     }
 
     return (
