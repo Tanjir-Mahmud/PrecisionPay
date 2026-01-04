@@ -4,10 +4,16 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import * as XLSX from "xlsx";
 import { format, parse, isValid } from "date-fns";
+import { verifyAuth } from "@/lib/firebase-admin";
 
-export async function importData(userId: string, formData: FormData) {
+export async function importData(idToken: string, formData: FormData) {
     try {
-        if (!userId) throw new Error("Unauthorized: No User ID provided");
+        // 1. Verify Identity (Server-Side)
+        const userId = await verifyAuth(idToken);
+
+        if (!userId) {
+            throw new Error("Unauthorized: Invalid Session - " + idToken.slice(0, 10));
+        }
 
         const file = formData.get("file") as File;
         if (!file) throw new Error("No file uploaded");

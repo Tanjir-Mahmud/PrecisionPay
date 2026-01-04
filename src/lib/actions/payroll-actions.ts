@@ -4,10 +4,13 @@ import { format, subMonths } from "date-fns";
 import { revalidatePath } from "next/cache";
 import { calculatePayroll } from "@/lib/payroll";
 import { prisma } from "@/lib/prisma";
+import { verifyAuth } from "@/lib/firebase-admin";
 
 // ... existing interfaces ...
 
-export async function runNewCalculation(userId: string) {
+export async function runNewCalculation(idToken: string) {
+    const userId = await verifyAuth(idToken);
+
     if (!userId) throw new Error("Unauthorized");
 
     const currentMonth = format(new Date(), "yyyy-MM");

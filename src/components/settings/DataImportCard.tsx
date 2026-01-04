@@ -29,12 +29,17 @@ export default function DataImportCard() {
         formData.append("file", file);
 
         startTransition(async () => {
-            const result = await importData(user.uid, formData);
-            if (result.success) {
-                setStatus({ type: 'success', message: result.message });
-                setFile(null);
-            } else {
-                setStatus({ type: 'error', message: result.message });
+            try {
+                const token = await user.getIdToken();
+                const result = await importData(token, formData);
+                if (result.success) {
+                    setStatus({ type: 'success', message: result.message });
+                    setFile(null);
+                } else {
+                    setStatus({ type: 'error', message: result.message });
+                }
+            } catch (e: any) {
+                setStatus({ type: 'error', message: "Auth Error: " + e.message });
             }
         });
     };

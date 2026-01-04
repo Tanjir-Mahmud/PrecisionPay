@@ -12,7 +12,8 @@ export default function RunPayrollButton() {
     const handleClick = () => {
         if (!user) return;
         startTransition(async () => {
-            await runNewCalculation(user.uid);
+            const token = await user.getIdToken();
+            await runNewCalculation(token);
         });
     };
 

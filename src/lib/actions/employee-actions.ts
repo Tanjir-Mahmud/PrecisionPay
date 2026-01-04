@@ -2,8 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { verifyAuth } from "@/lib/firebase-admin";
 
-export async function addEmployee(userId: string, formData: FormData) {
+export async function addEmployee(idToken: string, formData: FormData) {
+    const userId = await verifyAuth(idToken);
+
     if (!userId) {
         console.error("Unauthorized addEmployee attempt");
         return;
