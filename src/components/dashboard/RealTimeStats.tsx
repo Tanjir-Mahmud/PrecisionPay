@@ -7,7 +7,20 @@ export default async function RealTimeStats() {
     const stats = await getDashboardStats();
 
     // Format currency helper
-    const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: stats.compliance.currency || 'USD', maximumFractionDigits: 0 }).format(n);
+    // Format currency helper
+    const getIsoCurrency = (symbol: string) => {
+        if (symbol === "£") return "GBP";
+        if (symbol === "€") return "EUR";
+        if (symbol === "৳") return "BDT";
+        if (symbol === "₹") return "INR";
+        return "USD"; // Default to USD for "$" or others
+    };
+
+    const fmt = (n: number) => new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: getIsoCurrency(stats.compliance.currency),
+        maximumFractionDigits: 0
+    }).format(n).replace("BDT", "৳").replace("USD", "$");
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
